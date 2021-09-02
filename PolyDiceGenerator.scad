@@ -66,6 +66,9 @@ text_stroke=0; //[0:0.01:0.08]
 symbol_stroke=0; //[0:0.01:0.08]
 add_bumpers=false;
 bumper_size=0.3;
+add_printer_edges=false;
+edge_size=.9;
+edge_fix=.2;
 
 /* [Rounding] */
 edge_rounding=0;   //[0:0.1:3]
@@ -357,6 +360,7 @@ d20_adj_h_push=[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
 d20_adj_spacing=[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
 d20_adj_depth=[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
 
+
 /* [Please Support PolyDiceGenerator] */
 Go_to="https://ko-fi.com/charmaur";
 
@@ -437,6 +441,116 @@ if(d20) right(spacing) drawd20();
 txt_font=str_strip(text_font,"\"");
 under_font=str_strip(underscore_font,"\"");
 sym_font=str_strip(symbol_font,"\"");
+
+module printer_prismoid(
+    path, width=1, closed=false
+) {
+    assert(is_bool(closed));
+    assert(is_list(path));
+    if (len(path) > 1) {
+        assert(is_path(path,[2,3]), "The path argument must be a list of 2D or 3D points.");
+    }
+    path = deduplicate( closed? close_path(path) : path );
+
+    // assert(is_num(width));
+    width = is_num(width)? [for (x=path) width] : width;
+    echo(path);
+
+    spos = path_pos_from_start(path,0,closed=false);
+    epos = path_pos_from_end(path,0,closed=false);
+
+    widths = concat(
+        [lerp(width[spos[0]], width[(spos[0]+1)%len(width)], spos[1])],
+        [for (i = [spos[0]+1:1:epos[0]]) width[i]],
+        [lerp(width[epos[0]], width[(epos[0]+1)%len(width)], epos[1])]
+    );
+
+    start_vec = select(path,0) - select(path,1);
+    end_vec = select(path,-1) - select(path,-2);
+
+    quatsums = Q_Cumulative([
+        for (i = idx(path,end=-2)) let(
+            vec1 = i==0? UP : unit(path[i]-path[i-1], UP),
+            vec2 = unit(path[i+1]-path[i], UP),
+            axis = vector_axis(vec1,vec2),
+            ang = vector_angle(vec1,vec2)
+        ) Quat(axis,ang) 
+    ]);
+    rotmats = [for (q=quatsums) Q_Matrix4(q)];
+    echo(rotmats);
+    echo("-****-");
+    // Straight segments
+    for (i = idx(path,end=-2)) {
+        
+        vec1 = i==0? UP : unit(path[i]-path[i-1], UP);
+        vec2 = unit(path[i+1]-path[i], UP);
+        axis = vector_axis(vec1,vec2);
+        ang = vector_angle(vec1,vec2);
+        echo(axis);
+        echo(ang);
+        echo("--");
+
+        dist = norm(path[i+1] - path[i]);
+        $fn = 3;
+            translate(path[i]) {
+                multmatrix(rotmats[i]) {
+                    rotate([0,0,0]){
+                        cylinder(r=width[0], h=dist, center=false);
+                    }
+                }
+            }
+    }
+}
+
+module printer_edges(
+    path, width=1, closed=false
+) {
+    assert(is_bool(closed));
+    assert(is_list(path));
+    if (len(path) > 1) {
+        assert(is_path(path,[2,3]), "The path argument must be a list of 2D or 3D points.");
+    }
+    path = deduplicate( closed? close_path(path) : path );
+
+    assert(is_num(width) || (is_vector(width) && len(width)==len(path)));
+    width = is_num(width)? [for (x=path) width] : width;
+
+    spos = path_pos_from_start(path,0,closed=false);
+    epos = path_pos_from_end(path,0,closed=false);
+
+    widths = concat(
+        [lerp(width[spos[0]], width[(spos[0]+1)%len(width)], spos[1])],
+        [for (i = [spos[0]+1:1:epos[0]]) width[i]],
+        [lerp(width[epos[0]], width[(epos[0]+1)%len(width)], epos[1])]
+    );
+
+    start_vec = select(path,0) - select(path,1);
+    end_vec = select(path,-1) - select(path,-2);
+
+    quatsums = Q_Cumulative([
+        for (i = idx(path,end=-2)) let(
+            vec1 = i==0? UP : unit(path[i]-path[i-1], UP),
+            vec2 = unit(path[i+1]-path[i], UP),
+            axis = vector_axis(vec1,vec2),
+            ang = vector_angle(vec1,vec2)
+        ) Quat(axis,ang)
+    ]);
+    rotmats = [for (q=quatsums) Q_Matrix4(q)];
+
+    // Straight segments
+    for (i = idx(path,end=-2)) {
+        dist = norm(path[i+1] - path[i]);
+        w1 = widths[i]/2;
+        w2 = widths[i+1]/2;
+        $fn = 3;
+        translate(path[i]) {
+            multmatrix(rotmats[i]) {
+                cylinder(r1=w1, r2=w2, h=dist, center=false);
+            }
+        }
+    }
+}
+
 
 function fix_quotes(x)=[for (i=x) if(i=="undef" || i==undef) undef else if (i=="true" || i==true) true else if (i=="false" || i==false) false else i];
 
@@ -849,6 +963,15 @@ module drawd6(){
                 regular_polyhedron("cube",side=d6_size,anchor=BOTTOM);
                 regular_polyhedron("cube",side=d6_size,anchor=BOTTOM,rotate_children=false,draw=false)
                 if(bumpers[$faceindex]) stroke($face,width=bumper_size,closed=true);
+            }
+        if(add_printer_edges)
+            //render printer_edges
+            union()
+            {
+                regular_polyhedron("cube",side=d6_size,anchor=BOTTOM);
+                translate([0,0,-edge_size/2]) regular_polyhedron("cube",side=d6_size+edge_size+edge_fix,anchor=BOTTOM,rotate_children=false, draw=false)
+                if(bumpers[$faceindex])
+                #printer_prismoid(path=$face, width=edge_size, closed=true);
             }
         else if(edge_rounding==0 && (corner_rounding>0 || corner_clipping>0))
             //render clipping objects
