@@ -443,7 +443,7 @@ under_font=str_strip(underscore_font,"\"");
 sym_font=str_strip(symbol_font,"\"");
 
 module printer_prismoid(
-    path, width=1, closed=false, side
+    path, width=1, closed=false, side_len
 ) {
     assert(is_bool(closed));
     assert(is_list(path));
@@ -478,27 +478,41 @@ module printer_prismoid(
     rotmats = [for (q=quatsums) Q_Matrix4(q)];
 
     plane_normal = vector_axis([path[0],path[1],path[2]]);
-    echo(plane_normal);
-    echo(BOTTOM);
+    echo(">>>", plane_normal);
     // Straight segments
     for (i = idx(path,end=-2)) {
+        // i=0;
+
+        vec_dir = unit(path[i+1]-path[i], plane_normal);
+        echo("vec_dir",  vec_dir);
+
+        vec_center_path = vmul(vec_dir, [side_len/2, side_len/2, side_len/2]);
+        echo("vec_center_path", vec_center_path );
+
+        center_angle = vector_angle(path[i+1] - path[i],[1,0,0]);
+        vec_center_angle = vmul(plane_normal, [center_angle,center_angle,center_angle]);
+        echo("center_angle", vec_center_angle);
+        
         
         vec1 = i==0? UP : unit(path[i]-path[i-1], UP);
         vec2 = unit(path[i+1]-path[i], UP);
         axis = vector_axis(vec1,vec2);
         ang = vector_angle(vec1,vec2);
         // echo(rotmats[i]);
-        // echo(i);
-        // echo("----");
+        echo("axis", axis);
+        echo("ang", ang);
+        echo("----");
         dist = norm(path[i+1] - path[i]);
         $fn = 3;
-        translate(path[i]) {
-            multmatrix(rotmats[i]) {
-                //rotate([0,0,-45]){
-                    prismoid(size1=[side, 0], size2=[side,width[0]], h=width[0], anchor=LEFT+(plane_normal * -1 * 1), orient=LEFT);
-                    // cylinder(r=width[0], h=dist, center=false);
-                }
-            //}
+        translate(vec_center_path) {
+            translate(path[i]) {
+                //multmatrix(rotmats[i]) {
+                    rotate(vec_center_angle){
+                        prismoid(size1=[side_len, 0], size2=[side_len,width[0]], h=width[0], orient=plane_normal); //, anchor=LEFT+(BOTTOM * 1), orient=LEFT);
+                        // cylinder(r=width[0], h=dist, center=false);
+                    }
+                //}
+            }
         }
     }
 }
@@ -923,7 +937,7 @@ module drawd6(){
                 // translate([0,0,-edge_size/2]) regular_polyhedron("cube",side=d6_size+edge_size+edge_fix,anchor=BOTTOM,rotate_children=false, draw=false)
                 regular_polyhedron("cube",side=d6_size,anchor=BOTTOM,rotate_children=false, draw=false)
                 if(bumpers[$faceindex])
-                #printer_prismoid(path=$face, width=edge_size, closed=true, side=d6_size);
+                #printer_prismoid(path=$face, width=edge_size, closed=true, side_len=d6_size);
             }
         else if(edge_rounding==0 && (corner_rounding>0 || corner_clipping>0))
             //render clipping objects
