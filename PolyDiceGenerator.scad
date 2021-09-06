@@ -455,66 +455,56 @@ module printer_prismoid(
     // assert(is_num(width));
     width = is_num(width)? [for (x=path) width] : width;
 
-    spos = path_pos_from_start(path,0,closed=false);
-    epos = path_pos_from_end(path,0,closed=false);
+    // spos = path_pos_from_start(path,0,closed=false);
+    // epos = path_pos_from_end(path,0,closed=false);
 
-    widths = concat(
-        [lerp(width[spos[0]], width[(spos[0]+1)%len(width)], spos[1])],
-        [for (i = [spos[0]+1:1:epos[0]]) width[i]],
-        [lerp(width[epos[0]], width[(epos[0]+1)%len(width)], epos[1])]
-    );
+    // widths = concat(
+    //     [lerp(width[spos[0]], width[(spos[0]+1)%len(width)], spos[1])],
+    //     [for (i = [spos[0]+1:1:epos[0]]) width[i]],
+    //     [lerp(width[epos[0]], width[(epos[0]+1)%len(width)], epos[1])]
+    // );
 
     start_vec = select(path,0) - select(path,1);
     end_vec = select(path,-1) - select(path,-2);
 
-    quatsums = Q_Cumulative([
-        for (i = idx(path,end=-2)) let(
-            vec1 = i==0? UP : unit(path[i]-path[i-1], UP),
-            vec2 = unit(path[i+1]-path[i], UP),
-            axis = vector_axis(vec1,vec2),
-            ang = vector_angle(vec1,vec2)
-        ) Quat(axis,ang) 
-    ]);
-    rotmats = [for (q=quatsums) Q_Matrix4(q)];
-
     plane_normal = vector_axis([path[0],path[1],path[2]]);
     echo(">>>", plane_normal);
     // Straight segments
-    for (i = idx(path,end=-2)) {
-        // i=0;
-
-        vec_dir = unit(path[i+1]-path[i], plane_normal);
+    start_dir=unit([-1,0,0]);
+    echo("start_dir",  start_dir);
+    // for (i = idx(path,end=-2)) {
+    for (i = [0:2]){
+        vec_dir = unit(path[i+1]-path[i]);
         echo("vec_dir",  vec_dir);
 
         vec_center_path = vmul(vec_dir, [side_len/2, side_len/2, side_len/2]);
         echo("vec_center_path", vec_center_path );
 
-        center_angle = vector_angle(path[i+1] - path[i],[1,0,0]);
-        vec_center_angle = vmul(plane_normal, [center_angle,center_angle,center_angle]);
-        echo("center_angle", vec_center_angle);
+        center_angle = vector_angle(start_dir, vec_dir);
+        // prev_dir = vec_dir;
+        echo("center_angle", center_angle);
+        vec_center_angle = vmul(plane_normal, [center_angle, center_angle, center_angle]);
+        echo("vec_center_angle", vec_center_angle);
         
-        
+        /*
         vec1 = i==0? UP : unit(path[i]-path[i-1], UP);
         vec2 = unit(path[i+1]-path[i], UP);
         axis = vector_axis(vec1,vec2);
         ang = vector_angle(vec1,vec2);
         // echo(rotmats[i]);
         echo("axis", axis);
-        echo("ang", ang);
+        echo("ang", ang);*/
         echo("----");
         dist = norm(path[i+1] - path[i]);
         $fn = 3;
         translate(vec_center_path) {
             translate(path[i]) {
-                //multmatrix(rotmats[i]) {
-                    rotate(vec_center_angle){
-                        prismoid(size1=[side_len, 0], size2=[side_len,width[0]], h=width[0], orient=plane_normal); //, anchor=LEFT+(BOTTOM * 1), orient=LEFT);
-                        // cylinder(r=width[0], h=dist, center=false);
-                    }
-                //}
+                rotate(vec_center_angle){
+                    prismoid(size1=[side_len, 0], size2=[side_len,width[0]], h=width[0], orient=plane_normal, anchor=(BOTTOM * 1)); //, anchor=LEFT+(BOTTOM * 1), orient=LEFT);
+                }
             }
         }
-    }
+   }
 }
 
 function fix_quotes(x)=[for (i=x) if(i=="undef" || i==undef) undef else if (i=="true" || i==true) true else if (i=="false" || i==false) false else i];
@@ -1025,6 +1015,14 @@ module drawd8(){
                 regular_polyhedron("octahedron",side=d8_side,anchor=BOTTOM,rotate_children=false,draw=false)
                 if(bumpers[$faceindex]) stroke($face,width=bumper_size,closed=true);
             }
+        if(add_printer_edges)
+        union()
+        {
+            regular_polyhedron("octahedron",side=d8_side,anchor=BOTTOM);
+            regular_polyhedron("octahedron",side=d8_side,anchor=BOTTOM,rotate_children=false,draw=false)
+            if(bumpers[$faceindex])
+            #printer_prismoid(path=$face, width=edge_size, closed=true, side_len=d8_side);
+        }
         else if(edge_rounding==0 && (corner_rounding>0 || corner_clipping>0))
             //render clipping objects
             intersection()
@@ -1408,6 +1406,15 @@ module drawd20(){
                 regular_polyhedron("icosahedron",ir=d20_size/2,anchor=BOTTOM);
                 regular_polyhedron("icosahedron",ir=d20_size/2,anchor=BOTTOM,rotate_children=false,draw=false)
                 if(bumpers[$faceindex]) stroke($face,width=bumper_size,closed=true);
+            }
+        if(add_printer_edges)
+            //render printer_edges
+            union()
+            {
+                regular_polyhedron("icosahedron",ir=d20_size/2,anchor=BOTTOM);
+                regular_polyhedron("icosahedron",ir=d20_size/2,anchor=BOTTOM,rotate_children=false,draw=false)
+                if(bumpers[$faceindex])
+                #printer_prismoid(path=$face, width=edge_size, closed=true, side_len=d20_side);
             }
         else if(edge_rounding==0 && (corner_rounding>0 || corner_clipping>0))
             //render clipping objects
