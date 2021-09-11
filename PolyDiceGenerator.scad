@@ -455,36 +455,28 @@ module printer_prismoid(
     // assert(is_num(width));
     width = is_num(width)? [for (x=path) width] : width;
 
-    // spos = path_pos_from_start(path,0,closed=false);
-    // epos = path_pos_from_end(path,0,closed=false);
-
-    // widths = concat(
-    //     [lerp(width[spos[0]], width[(spos[0]+1)%len(width)], spos[1])],
-    //     [for (i = [spos[0]+1:1:epos[0]]) width[i]],
-    //     [lerp(width[epos[0]], width[(epos[0]+1)%len(width)], epos[1])]
-    // );
-
     start_vec = select(path,0) - select(path,1);
     end_vec = select(path,-1) - select(path,-2);
 
     plane_normal = vector_axis([path[0],path[1],path[2]]);
     echo(">>>", plane_normal);
+   // echo("orient", orient(path));
     // Straight segments
-    start_dir=unit([-1,0,0]);
-    echo("start_dir",  start_dir);
-    // for (i = idx(path,end=-2)) {
-    for (i = [0:2]){
+    //for (i = idx(path,end=-2)) {
+    for (i = [2:2]){
         vec_dir = unit(path[i+1]-path[i]);
         echo("vec_dir",  vec_dir);
 
-        vec_center_path = vmul(vec_dir, [side_len/2, side_len/2, side_len/2]);
+        start_dir=unit([1, 0 ,0]); //path[1]-path[0]);
+        echo("start_dir",  start_dir);
+
+        vec_center_path = v_mul(vec_dir, [side_len/2, side_len/2, side_len/2]);
         echo("vec_center_path", vec_center_path );
 
         center_angle = vector_angle(start_dir, vec_dir);
-        // prev_dir = vec_dir;
         echo("center_angle", center_angle);
-        vec_center_angle = vmul(plane_normal, [center_angle, center_angle, center_angle]);
-        echo("vec_center_angle", vec_center_angle);
+        // vec_center_angle = v_mul(plane_normal, [center_angle, center_angle, center_angle]);
+        // echo("vec_center_angle", vec_center_angle);
         
         /*
         vec1 = i==0? UP : unit(path[i]-path[i-1], UP);
@@ -496,14 +488,27 @@ module printer_prismoid(
         echo("ang", ang);*/
         echo("----");
         dist = norm(path[i+1] - path[i]);
-        $fn = 3;
-        translate(vec_center_path) {
-            translate(path[i]) {
-                rotate(vec_center_angle){
-                    prismoid(size1=[side_len, 0], size2=[side_len,width[0]], h=width[0], orient=plane_normal, anchor=(BOTTOM * 1)); //, anchor=LEFT+(BOTTOM * 1), orient=LEFT);
-                }
-            }
-        }
+        //$fn = 3;
+        //translate(vec_center_path) {
+            //translate(path[i]) {
+                //rotate(vec_center_angle){
+                //rotate([0,90,0]){
+                    //rot(from=[1, 0, 0], to=vec_center_angle)
+                    translate(vec_center_path) 
+                    translate(path[i]) 
+                    orient(plane_normal)
+                    // rot([0,0,center_angle], from=[0,0,1], to=plane_normal)
+                    prismoid(
+                        size1=[side_len, 0],
+                        size2=[side_len,width[0]],
+                        h=width[0],
+                        anchor=(BOTTOM * 1)
+                    ); //, anchor=LEFT+(BOTTOM * 1), orient=LEFT);
+                    //anchor_arrow();
+
+                //}
+            //}
+        //}
    }
 }
 
