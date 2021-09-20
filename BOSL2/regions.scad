@@ -58,38 +58,37 @@ module region(r)
 
 // Function: check_and_fix_path()
 // Usage:
-//   check_and_fix_path(path, [valid_dim], [closed])
+//   check_and_fix_path(path, [valid_dim], [closed], [name])
 // Description:
 //   Checks that the input is a path.  If it is a region with one component, converts it to a path.
+//   Note that arbitrary paths must have at least two points, but closed paths need at least 3 points.  
 //   valid_dim specfies the allowed dimension of the points in the path.
-//   If the path is closed, removed duplicate endpoint if present.
+//   If the path is closed, removes duplicate endpoint if present.
 // Arguments:
 //   path = path to process
 //   valid_dim = list of allowed dimensions for the points in the path, e.g. [2,3] to require 2 or 3 dimensional input.  If left undefined do not perform this check.  Default: undef
 //   closed = set to true if the path is closed, which enables a check for endpoint duplication
-function check_and_fix_path(path, valid_dim=undef, closed=false) =
+//   name = parameter name to use for reporting errors.  Default: "path"
+function check_and_fix_path(path, valid_dim=undef, closed=false, name="path") =
     let(
-        path = is_region(path)? (
-            assert(len(path)==1,"Region supplied as path does not have exactly one component")
-            path[0]
-        ) : (
-            assert(is_path(path), "Input is not a path")
-            path
-        ),
-        dim = array_dim(path)
+        path =
+          is_region(path)? 
+               assert(len(path)==1,str("Region ",name," supplied as path does not have exactly one component"))
+               path[0]
+          :
+               assert(is_path(path), str("Input ",name," is not a path"))
+               path
     )
-    assert(dim[0]>1,"Path must have at least 2 points")
-    assert(len(dim)==2,"Invalid path: path is either a list of scalars or a list of matrices")
-    assert(is_def(dim[1]), "Invalid path: entries in the path have variable length")
-    let(valid=is_undef(valid_dim) || in_list(dim[1],valid_dim))
+    assert(len(path)>(closed?2:1),closed?str("Closed path ",name," must have at least 3 points")
+                                        :str("Path ",name," must have at least 2 points"))
+    let(valid=is_undef(valid_dim) || in_list(len(path[0]),force_list(valid_dim)))
     assert(
         valid, str(
-            "The points on the path have length ",
-            dim[1], " but length must be ",
-            len(valid_dim)==1? valid_dim[0] : str("one of ",valid_dim)
+            "Input ",name," must has dimension ", len(path[0])," but dimension must be ",
+            is_list(valid_dim) ? str("one of ",valid_dim) : valid_dim
         )
     )
-    closed && approx(path[0],select(path,-1))? slice(path,0,-2) : path;
+    closed && approx(path[0], last(path))? list_head(path) : path;
 
 
 // Function: cleanup_region()
@@ -120,6 +119,76 @@ function point_in_region(point, region, eps=EPSILON, _i=0, _cnt=0) =
     (_i >= len(region))? ((_cnt%2==1)? 1 : -1) : let(
         pip = point_in_polygon(point, region[_i], eps=eps)
     ) pip==0? 0 : point_in_region(point, region, eps=eps, _i=_i+1, _cnt = _cnt + (pip>0? 1 : 0));
+
+
+// Function: polygons_equal()
+// Usage:
+//    b = polygons_equal(poly1, poly2, [eps])
+// Description:
+//    Returns true if the components of region1 and region2 are the same polygons
+//    within given epsilon tolerance.
+// Arguments:
+//    poly1 = first polygon
+//    poly2 = second polygon
+//    eps = tolerance for comparison
+// Example(NORENDER):
+//    polygons_equal(pentagon(r=4),
+//                   rot(360/5, p=pentagon(r=4))); // returns true
+//    polygons_equal(pentagon(r=4),
+//                   rot(90, p=pentagon(r=4)));    // returns false
+function polygons_equal(poly1, poly2, eps=EPSILON) =
+    let(
+        poly1 = cleanup_path(poly1),
+        poly2 = cleanup_path(poly2),
+        l1 = len(poly1),
+        l2 = len(poly2)
+    ) l1 != l2 ? false :
+    let( maybes = find_first_match(poly1[0], poly2, eps=eps, all=true) )
+    maybes == []? false :
+    [for (i=maybes) if (__polygons_equal(poly1, poly2, eps, i)) 1] != [];
+
+function __polygons_equal(poly1, poly2, eps, st) =
+    max([for(d=poly1-select(poly2,st,st-1)) d*d])<eps*eps;
+
+
+// Function: poly_in_polygons()
+// Topics: Polygons, Comparators
+// See Also: polygons_equal(), regions_equal()
+// Usage:
+//   bool = poly_in_polygons(poly, polys);
+// Description:
+//   Returns true if one of the polygons in `polys` is equivalent to the polygon `poly`.
+// Arguments:
+//   poly = The polygon to search for.
+//   polys = The list of polygons to look for the polygon in.
+function poly_in_polygons(poly, polys) =
+    __poly_in_polygons(poly, polys, 0);
+
+function __poly_in_polygons(poly, polys, i) =
+    i >= len(polys)? false :
+    polygons_equal(poly, polys[i])? true :
+    __poly_in_polygons(poly, polys, i+1);
+
+
+// Function: regions_equal()
+// Usage:
+//    b = regions_equal(region1, region2, [eps])
+// Description:
+//    Returns true if the components of region1 and region2 are the same polygons
+//    within given epsilon tolerance.
+// Arguments:
+//    poly1 = first polygon
+//    poly2 = second polygon
+//    eps = tolerance for comparison
+function regions_equal(region1, region2) =
+    assert(is_region(region1) && is_region(region2))
+    len(region1) != len(region2)? false :
+    __regions_equal(region1, region2, 0);
+
+function __regions_equal(region1, region2, i) =
+    i >= len(region1)? true :
+    !poly_in_polygons(region1[i], region2)? false :
+    __regions_equal(region1, region2, i+1);
 
 
 // Function: region_path_crossings()
@@ -367,9 +436,9 @@ function linear_sweep(region, height=1, center, twist=0, scale=1, slices, maxseg
                 for (path=rgn) let(
                     p = cleanup_path(path),
                     path = is_undef(maxseg)? p : [
-                        for (seg=pair_wrap(p)) each
+                        for (seg=pair(p,true)) each
                         let(steps=ceil(norm(seg.y-seg.x)/maxseg))
-                        lerp(seg.x, seg.y, [0:1/steps:1-EPSILON])
+                        lerpn(seg.x, seg.y, steps, false)
                     ]
                 )
                 rot(twist, p=scale([scale,scale],p=path))
@@ -380,9 +449,9 @@ function linear_sweep(region, height=1, center, twist=0, scale=1, slices, maxseg
             for (pathnum = idx(rgn)) let(
                 p = cleanup_path(rgn[pathnum]),
                 path = is_undef(maxseg)? p : [
-                    for (seg=pair_wrap(p)) each
+                    for (seg=pair(p,true)) each
                     let(steps=ceil(norm(seg.y-seg.x)/maxseg))
-                    lerp(seg.x, seg.y, [0:1/steps:1-EPSILON])
+                    lerpn(seg.x, seg.y, steps, false)
                 ],
                 verts = [
                     for (i=[0:1:slices]) let(
@@ -413,6 +482,7 @@ function _offset_chamfer(center, points, delta) =
 
 
 function _shift_segment(segment, d) =
+    assert(!approx(segment[0],segment[1]),"Path has repeated points")
     move(d*line_normal(segment),segment);
 
 
@@ -512,7 +582,7 @@ function _point_dist(path,pathseg_unit,pathseg_len,pt) =
 
 function _offset_region(
     paths, r, delta, chamfer, closed,
-    maxstep, check_valid, quality,
+    check_valid, quality,
     return_faces, firstface_index,
     flip_faces, _acc=[], _i=0
 ) =
@@ -524,7 +594,7 @@ function _offset_region(
                 offset(
                     paths[_i].y,
                     r=r, delta=delta, chamfer=chamfer, closed=closed,
-                    maxstep=maxstep, check_valid=check_valid, quality=quality,
+                    check_valid=check_valid, quality=quality,
                     return_faces=return_faces, firstface_index=firstface_index,
                     flip_faces=flip_faces
                 )
@@ -534,14 +604,14 @@ function _offset_region(
                 offset(
                     paths[_i].y,
                     r=u_mul(-1,r), delta=u_mul(-1,delta), chamfer=chamfer, closed=closed,
-                    maxstep=maxstep, check_valid=check_valid, quality=quality,
+                    check_valid=check_valid, quality=quality,
                     return_faces=return_faces, firstface_index=firstface_index,
                     flip_faces=flip_faces
                 )
             ])
         ),
         r=r, delta=delta, chamfer=chamfer, closed=closed,
-        maxstep=maxstep, check_valid=check_valid, quality=quality,
+        check_valid=check_valid, quality=quality,
         return_faces=return_faces, firstface_index=firstface_index, flip_faces=flip_faces
     );
 
@@ -606,7 +676,7 @@ function _offset_region(
 // Example(2D):
 //   star = star(5, r=100, ir=30);
 //   #stroke(closed=true, star);
-//   stroke(closed=true, offset(star, r=-10, closed=true));
+//   stroke(closed=true, offset(star, r=-10, closed=true, $fn=20));
 // Example(2D):  This case needs `quality=2` for success
 //   test = [[0,0],[10,0],[10,7],[0,7], [-1,-3]];
 //   polygon(offset(test,r=-1.9, closed=true, quality=2));
@@ -644,7 +714,7 @@ function _offset_region(
 //   region(offset(rgn, r=-5));
 function offset(
     path, r=undef, delta=undef, chamfer=false,
-    maxstep=0.1, closed=false, check_valid=true,
+    closed=false, check_valid=true,
     quality=1, return_faces=false, firstface_index=0,
     flip_faces=false
 ) = 
@@ -664,7 +734,7 @@ function offset(
             ])
         ) _offset_region(
             pathlist, r=r, delta=delta, chamfer=chamfer, closed=true,
-            maxstep=maxstep, check_valid=check_valid, quality=quality,
+            check_valid=check_valid, quality=quality,
             return_faces=return_faces, firstface_index=firstface_index,
             flip_faces=flip_faces
         )
@@ -689,7 +759,7 @@ function offset(
         // Note if !closed the last corner doesn't matter, so exclude it
         parallelcheck =
             (len(sharpcorners)==2 && !closed) ||
-            all_defined(select(sharpcorners,closed?0:1,-1))
+            all_defined(closed? sharpcorners : list_tail(sharpcorners))
     )
     assert(parallelcheck, "Path contains sequential parallel segments (either 180 deg turn or 0 deg turn")
     let(
@@ -700,49 +770,47 @@ function offset(
         outsidecorner = len(sharpcorners)==2 ? [false,false]
            :
             [for(i=[0:len(goodsegs)-1])
-                 let(prevseg=select(goodsegs,i-1))
+                let(prevseg=select(goodsegs,i-1))
+                i==0 && !closed ? false  // In open case first entry is bogus
+               :  
                 (goodsegs[i][1]-goodsegs[i][0]) * (goodsegs[i][0]-sharpcorners[i]) > 0
                  && (prevseg[1]-prevseg[0]) * (sharpcorners[i]-prevseg[1]) > 0
             ],
         steps = is_def(delta) ? [] : [
             for(i=[0:len(goodsegs)-1])
-                        r==0 ? 0 :
-            ceil(
-                abs(r)*vector_angle(
-                    select(goodsegs,i-1)[1]-goodpath[i],
-                    goodsegs[i][0]-goodpath[i]
-                )*PI/180/maxstep
-            )
+                r==0 ? 0
+                // floor is important here to ensure we don't generate extra segments when nearly straight paths expand outward
+              : 1+floor(segs(r)*vector_angle(   
+                                             select(goodsegs,i-1)[1]-goodpath[i],
+                                             goodsegs[i][0]-goodpath[i])
+                        /360)
         ],
         // If rounding is true then newcorners replaces sharpcorners with rounded arcs where needed
         // Otherwise it's the same as sharpcorners
         // If rounding is on then newcorners[i] will be the point list that replaces goodpath[i] and newcorners later
         // gets flattened.  If rounding is off then we set it to [sharpcorners] so we can later flatten it and get
         // plain sharpcorners back.
-        newcorners = is_def(delta) && !chamfer ? [sharpcorners] : [
-            for(i=[0:len(goodsegs)-1]) (
-                (!chamfer && steps[i] <=2)  //Chamfer all points but only round if steps is 3 or more
-                || !outsidecorner[i]        // Don't round inside corners
-                || (!closed && (i==0 || i==len(goodsegs)-1))  // Don't round ends of an open path
-            )? [sharpcorners[i]] : (
-                chamfer?
-                    _offset_chamfer(
-                        goodpath[i], [
-                            select(goodsegs,i-1)[1],
-                            sharpcorners[i],
-                            goodsegs[i][0]
-                        ], d
-                    ) :
-                arc(
-                    cp=goodpath[i],
-                    points=[
-                        select(goodsegs,i-1)[1],
-                        goodsegs[i][0]
-                    ],
-                    N=steps[i]
-                )
-            )
-        ],
+        newcorners = is_def(delta) && !chamfer ? [sharpcorners]
+            : [for(i=[0:len(goodsegs)-1])
+                  (!chamfer && steps[i] <=1)  // Don't round if steps is smaller than 2
+                  || !outsidecorner[i]        // Don't round inside corners
+                  || (!closed && (i==0 || i==len(goodsegs)-1))  // Don't round ends of an open path
+                ? [sharpcorners[i]]
+                : chamfer ? _offset_chamfer(
+                                  goodpath[i], [
+                                      select(goodsegs,i-1)[1],
+                                      sharpcorners[i],
+                                      goodsegs[i][0]
+                                  ], d
+                              )     
+                : // rounded case
+                  arc(cp=goodpath[i],
+                      points=[
+                          select(goodsegs,i-1)[1],
+                          goodsegs[i][0]
+                      ],
+                      N=steps[i])
+              ],
         pointcount = (is_def(delta) && !chamfer)?
             repeat(1,len(sharpcorners)) :
             [for(i=[0:len(goodsegs)-1]) len(newcorners[i])],

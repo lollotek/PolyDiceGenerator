@@ -6,35 +6,19 @@ include <../std.scad>
 
 
 
-test_point_on_segment2d();
+test_point_on_segment();
 test_point_left_of_line2d();
 test_collinear();
-test_distance_from_line();
+test_point_line_distance();
+test_segment_distance();
 test_line_normal();
 test_line_intersection();
-//test_line_ray_intersection();
-test_line_segment_intersection();
-//test_ray_intersection();
-//test_ray_segment_intersection();
-test_segment_intersection();
+//test_line_ray_intersection();   // should add this typ eof case
+//test_ray_intersection();    // should add this type of case
+//test_ray_segment_intersection();  // should add this type of case
 test_line_closest_point();
-//test_ray_closest_point();
-test_segment_closest_point();
+//test_ray_closest_point();   // should add this type of case
 test_line_from_points();
-test_tri_calc();
-//test_hyp_opp_to_adj();
-//test_hyp_ang_to_adj();
-//test_opp_ang_to_adj();
-//test_hyp_adj_to_opp();
-//test_hyp_ang_to_opp();
-//test_adj_ang_to_opp();
-//test_adj_opp_to_hyp();
-//test_adj_ang_to_hyp();
-//test_opp_ang_to_hyp();
-//test_hyp_adj_to_ang();
-//test_hyp_opp_to_ang();
-//test_adj_opp_to_ang();
-test_triangle_area();
 test_plane3pt();
 test_plane3pt_indexed();
 test_plane_from_normal();
@@ -42,12 +26,10 @@ test_plane_from_points();
 test_plane_from_polygon();
 test_plane_normal();
 test_plane_offset();
-test_plane_transform();
 test_projection_on_plane();
 test_plane_point_nearest_origin();
-test_distance_from_plane();
+test_point_plane_distance();
 
-test_closest_point_on_plane();
 test__general_plane_line_intersection();
 test_plane_line_angle();
 test_normalize_plane();
@@ -56,7 +38,7 @@ test_polygon_line_intersection();
 test_plane_intersection();
 test_coplanar();
 test_points_on_plane();
-test_in_front_of_plane();
+test_above_plane();
 test_circle_2tangents();
 test_circle_3points();
 test_circle_point_tangents();
@@ -90,7 +72,8 @@ test_cleanup_path();
 test_simplify_path();
 test_simplify_path_indexed();
 test_is_region();
-
+test_convex_distance();
+test_convex_collision();
 
 // to be used when there are two alternative symmetrical outcomes 
 // from a function like a plane output; v must be a vector
@@ -109,15 +92,6 @@ function info_str(list,i=0,string=chr(10)) =
     i>=len(list)
     ? str(string)
     : info_str(list,i+1,str(string,str(list[i][0],_valstr(list[i][1]),chr(10))));
-
-
-module test_closest_point_on_plane(){
-    plane = rands(-5,5,4,seed=175)+[10,0,0,0];
-    point = rands(-1,1,3,seed=477);
-    point2 = closest_point_on_plane(plane,point);
-    assert_approx(norm(point-point2), abs(distance_from_plane(plane,point)));    
-}
-*test_closest_point_on_plane();
 
 
 module test_normalize_plane(){
@@ -185,16 +159,6 @@ module test_plane_point_nearest_origin(){
 test_plane_point_nearest_origin();
 
 
-module test_plane_transform(){
-    normal = rands(-1,1,3)+[2,0,0];
-    offset = rands(-1,1,1)[0];
-    info = info_str([["normal = ",normal],["offset = ",offset]]);
-    assert_approx(plane_transform([0,0,1,offset]),move([0,0,-offset]),info );
-    assert_approx(plane_transform([0,1,0,offset]),xrot(90)*move([0,-offset,0]),info );
-}
-*test_plane_transform();
-
-
 module test_plane_offset(){
     plane = rands(-1,1,4)+[2,0,0,0]; // a valid plane
     info = info_str([["plane = ",plane]]);
@@ -207,8 +171,8 @@ module test_plane_from_polygon(){
     poly1 = [ rands(-1,1,3), rands(-1,1,3)+[2,0,0], rands(-1,1,3)+[0,2,2] ];
     poly2 = concat(poly1, [sum(poly1)/3] );
     info = info_str([["poly1 = ",poly1],["poly2 = ",poly2]]);
-    assert_std(plane_from_polygon(poly1),plane3pt(poly1[0],poly1[1],poly1[2]),info);
-    assert_std(plane_from_polygon(poly2),plane3pt(poly1[0],poly1[1],poly1[2]),info);
+    assert_approx(plane_from_polygon(poly1),plane3pt(poly1[0],poly1[1],poly1[2]),info);
+    assert_approx(plane_from_polygon(poly2),plane3pt(poly1[0],poly1[1],poly1[2]),info);
 }
 *test_plane_from_polygon();
 
@@ -218,8 +182,7 @@ module test_plane_from_normal(){
     displ = normal*point;
     info = info_str([["normal = ",normal],["point = ",point],["displ = ",displ]]);
     assert_approx(plane_from_normal(normal,point)*[each point,-1],0,info);
-    assert_std(plane_from_normal(normal,point),normalize_plane([each normal,displ]),info);
-    assert_std(plane_from_normal([1,1,1],[1,2,3]),[0.57735026919,0.57735026919,0.57735026919,3.46410161514]);
+    assert_approx(plane_from_normal([1,1,1],[1,2,3]),[0.57735026919,0.57735026919,0.57735026919,3.46410161514]);
 }
 *test_plane_from_normal();
 
@@ -252,7 +215,7 @@ module test__general_plane_line_intersection() {
         interspoint = line1[0]+inters1[1]*(line1[1]-line1[0]);
         assert_approx(inters1[0],interspoint, info1); 
         assert_approx(point3d(plane1)*inters1[0], plane1[3], info1); // interspoint on the plane
-        assert_approx(distance_from_plane(plane1, inters1[0]), 0, info1); // inters1[0] on the plane
+        assert_approx(point_plane_distance(plane1, inters1[0]), 0, info1); // inters1[0] on the plane
     }
 
     // line parallel to the plane
@@ -321,35 +284,35 @@ module test_line_from_points() {
 }
 *test_line_from_points();
 
-module test_point_on_segment2d() {
-    assert(point_on_segment2d([-15,0], [[-10,0], [10,0]]) == false);
-    assert(point_on_segment2d([-10,0], [[-10,0], [10,0]]) == true);
-    assert(point_on_segment2d([-5,0], [[-10,0], [10,0]]) == true);
-    assert(point_on_segment2d([0,0], [[-10,0], [10,0]]) == true);
-    assert(point_on_segment2d([3,3], [[-10,0], [10,0]]) == false);
-    assert(point_on_segment2d([5,0], [[-10,0], [10,0]]) == true);
-    assert(point_on_segment2d([10,0], [[-10,0], [10,0]]) == true);
-    assert(point_on_segment2d([15,0], [[-10,0], [10,0]]) == false);
+module test_point_on_segment() { 
+    assert(point_on_segment([-15,0], [[-10,0], [10,0]]) == false);
+    assert(point_on_segment([-10,0], [[-10,0], [10,0]]) == true);
+    assert(point_on_segment([-5,0], [[-10,0], [10,0]]) == true);
+    assert(point_on_segment([0,0], [[-10,0], [10,0]]) == true);
+    assert(point_on_segment([3,3], [[-10,0], [10,0]]) == false);
+    assert(point_on_segment([5,0], [[-10,0], [10,0]]) == true);
+    assert(point_on_segment([10,0], [[-10,0], [10,0]]) == true);
+    assert(point_on_segment([15,0], [[-10,0], [10,0]]) == false);
 
-    assert(point_on_segment2d([0,-15], [[0,-10], [0,10]]) == false);
-    assert(point_on_segment2d([0,-10], [[0,-10], [0,10]]) == true);
-    assert(point_on_segment2d([0, -5], [[0,-10], [0,10]]) == true);
-    assert(point_on_segment2d([0,  0], [[0,-10], [0,10]]) == true);
-    assert(point_on_segment2d([3,  3], [[0,-10], [0,10]]) == false);
-    assert(point_on_segment2d([0,  5], [[0,-10], [0,10]]) == true);
-    assert(point_on_segment2d([0, 10], [[0,-10], [0,10]]) == true);
-    assert(point_on_segment2d([0, 15], [[0,-10], [0,10]]) == false);
+    assert(point_on_segment([0,-15], [[0,-10], [0,10]]) == false);
+    assert(point_on_segment([0,-10], [[0,-10], [0,10]]) == true);
+    assert(point_on_segment([0, -5], [[0,-10], [0,10]]) == true);
+    assert(point_on_segment([0,  0], [[0,-10], [0,10]]) == true);
+    assert(point_on_segment([3,  3], [[0,-10], [0,10]]) == false);
+    assert(point_on_segment([0,  5], [[0,-10], [0,10]]) == true);
+    assert(point_on_segment([0, 10], [[0,-10], [0,10]]) == true);
+    assert(point_on_segment([0, 15], [[0,-10], [0,10]]) == false);
 
-    assert(point_on_segment2d([-15,-15], [[-10,-10], [10,10]]) == false);
-    assert(point_on_segment2d([-10,-10], [[-10,-10], [10,10]]) == true);
-    assert(point_on_segment2d([ -5, -5], [[-10,-10], [10,10]]) == true);
-    assert(point_on_segment2d([  0,  0], [[-10,-10], [10,10]]) == true);
-    assert(point_on_segment2d([  0,  3], [[-10,-10], [10,10]]) == false);
-    assert(point_on_segment2d([  5,  5], [[-10,-10], [10,10]]) == true);
-    assert(point_on_segment2d([ 10, 10], [[-10,-10], [10,10]]) == true);
-    assert(point_on_segment2d([ 15, 15], [[-10,-10], [10,10]]) == false);
+    assert(point_on_segment([-15,-15], [[-10,-10], [10,10]]) == false);
+    assert(point_on_segment([-10,-10], [[-10,-10], [10,10]]) == true);
+    assert(point_on_segment([ -5, -5], [[-10,-10], [10,10]]) == true);
+    assert(point_on_segment([  0,  0], [[-10,-10], [10,10]]) == true);
+    assert(point_on_segment([  0,  3], [[-10,-10], [10,10]]) == false);
+    assert(point_on_segment([  5,  5], [[-10,-10], [10,10]]) == true);
+    assert(point_on_segment([ 10, 10], [[-10,-10], [10,10]]) == true);
+    assert(point_on_segment([ 15, 15], [[-10,-10], [10,10]]) == false);
 }
-*test_point_on_segment2d();
+*test_point_on_segment();
 
 
 module test_point_left_of_line2d() {
@@ -373,13 +336,30 @@ module test_collinear() {
 *test_collinear();
 
 
-module test_distance_from_line() {
-    assert(abs(distance_from_line([[-10,-10,-10], [10,10,10]], [1,1,1])) < EPSILON);
-    assert(abs(distance_from_line([[-10,-10,-10], [10,10,10]], [-1,-1,-1])) < EPSILON);
-    assert(abs(distance_from_line([[-10,-10,-10], [10,10,10]], [1,-1,0]) - sqrt(2)) < EPSILON);
-    assert(abs(distance_from_line([[-10,-10,-10], [10,10,10]], [8,-8,0]) - 8*sqrt(2)) < EPSILON);
+module test_point_line_distance() {
+    assert_approx(point_line_distance([1,1,1], [[-10,-10,-10], [10,10,10]]), 0);
+    assert_approx(point_line_distance([-1,-1,-1], [[-10,-10,-10], [10,10,10]]), 0);
+    assert_approx(point_line_distance([1,-1,0], [[-10,-10,-10], [10,10,10]]), sqrt(2));
+    assert_approx(point_line_distance([8,-8,0], [[-10,-10,-10], [10,10,10]]), 8*sqrt(2));
+    assert_approx(point_line_distance([3,8], [[-10,0], [10,0]],SEGMENT), 8);
+    assert_approx(point_line_distance([14,3], [[-10,0], [10,0]],SEGMENT), 5);
 }
-*test_distance_from_line();
+*test_point_line_distance();
+
+
+module test_segment_distance() {
+    assert_approx(segment_distance([[-14,3], [-14,9]], [[-10,0], [10,0]]), 5);
+    assert_approx(segment_distance([[-14,3], [-15,9]], [[-10,0], [10,0]]), 5);
+    assert_approx(segment_distance([[14,3], [14,9]], [[-10,0], [10,0]]), 5);
+    assert_approx(segment_distance([[-14,-3], [-14,-9]], [[-10,0], [10,0]]), 5);
+    assert_approx(segment_distance([[-14,-3], [-15,-9]], [[-10,0], [10,0]]), 5);
+    assert_approx(segment_distance([[14,-3], [14,-9]], [[-10,0], [10,0]]), 5);
+    assert_approx(segment_distance([[14,3], [14,-3]], [[-10,0], [10,0]]), 4);
+    assert_approx(segment_distance([[-14,3], [-14,-3]], [[-10,0], [10,0]]), 4);
+    assert_approx(segment_distance([[-6,5], [4,-5]], [[-10,0], [10,0]]), 0);
+    assert_approx(segment_distance([[-5,5], [5,-5]], [[-10,3], [10,-3]]), 0);
+}
+*test_segment_distance();
 
 
 module test_line_normal() {
@@ -394,7 +374,7 @@ module test_line_normal() {
     assert(line_normal([[0,0],[0,-10]]) == [1,0]);
     assert(approx(line_normal([[0,0],[10,10]]), [-sqrt(2)/2,sqrt(2)/2]));
     pts = [for (p=pair(rands(-100,100,1000,seed_value=4312))) p];
-    for (p = pair_wrap(pts)) {
+    for (p = pair(pts,true)) {
         p1 = p.x;
         p2 = p.y;
         n = unit(p2-p1);
@@ -415,39 +395,18 @@ module test_line_intersection() {
     assert(line_intersection([[-10,-10], [ -1, -1]], [[ 10,-10], [  1, -1]]) == [0,0]);
     assert(line_intersection([[-10,-10], [ 10, 10]], [[ 10,-10], [-10, 10]]) == [0,0]);
     assert(line_intersection([[ -8,  0], [ 12,  4]], [[ 12,  0], [ -8,  4]]) == [2,2]);
+    assert(line_intersection([[-10,-10], [ -1,-10]], [[ 10,-10], [  1,-10]],LINE,SEGMENT) == undef);
+    assert(line_intersection([[-10,  0], [ -1,  0]], [[ 10,  0], [  1,  0]],LINE,SEGMENT) == undef);
+    assert(line_intersection([[-10,  0], [ -1,  0]], [[  1,  0], [ 10,  0]],LINE,SEGMENT) == undef);
+    assert(line_intersection([[-10,  0], [ 10,  0]], [[-10,  0], [ 10,  0]],LINE,SEGMENT) == undef);
+    assert(line_intersection([[-10, 10], [ 10, 10]], [[-10,-10], [ 10,-10]],LINE,SEGMENT) == undef);
+    assert(line_intersection([[-10,-10], [ -1, -1]], [[ 10,-10], [  1, -1]],LINE,SEGMENT) == undef);
+    assert(line_intersection([[-10,-10], [ 10, 10]], [[ 10,-10], [-10, 10]],LINE,SEGMENT) == [0,0]);
+    assert(line_intersection([[ -8,  0], [ 12,  4]], [[ 12,  0], [ -8,  4]],LINE,SEGMENT) == [2,2]);
+    assert(line_intersection([[-10,-10], [ 10, 10]], [[ 10,-10], [  1, -1]],LINE,SEGMENT) == undef);
+    assert(line_intersection([[-10,-10], [ 10, 10]], [[ 10,-10], [ -1,  1]],LINE,SEGMENT) == [0,0]);
 }
 *test_line_intersection();
-
-
-module test_segment_intersection() {
-    assert(segment_intersection([[-10,-10], [ -1, -1]], [[ 10,-10], [  1, -1]]) == undef);
-    assert(segment_intersection([[-10,-10], [ -1,-10]], [[ 10,-10], [  1,-10]]) == undef);
-    assert(segment_intersection([[-10,  0], [ -1,  0]], [[ 10,  0], [  1,  0]]) == undef);
-    assert(segment_intersection([[-10,  0], [ -1,  0]], [[  1,  0], [ 10,  0]]) == undef);
-    assert(segment_intersection([[-10, 10], [ -1,  1]], [[ 10, 10], [  1,  1]]) == undef);
-    assert(segment_intersection([[-10,  0], [ 10,  0]], [[-10,  0], [ 10,  0]]) == undef);
-    assert(segment_intersection([[-10, 10], [ 10, 10]], [[-10,-10], [ 10,-10]]) == undef);
-    assert(segment_intersection([[-10,  0], [  0, 10]], [[  0, 10], [ 10,  0]]) == [0,10]);
-    assert(segment_intersection([[-10,  0], [  0, 10]], [[-10, 20], [ 10,  0]]) == [0,10]);
-    assert(segment_intersection([[-10,-10], [ 10, 10]], [[ 10,-10], [-10, 10]]) == [0,0]);
-    assert(segment_intersection([[ -8,  0], [ 12,  4]], [[ 12,  0], [ -8,  4]]) == [2,2]);
-}
-*test_segment_intersection();
-
-
-module test_line_segment_intersection() {
-    assert(line_segment_intersection([[-10,-10], [ -1,-10]], [[ 10,-10], [  1,-10]]) == undef);
-    assert(line_segment_intersection([[-10,  0], [ -1,  0]], [[ 10,  0], [  1,  0]]) == undef);
-    assert(line_segment_intersection([[-10,  0], [ -1,  0]], [[  1,  0], [ 10,  0]]) == undef);
-    assert(line_segment_intersection([[-10,  0], [ 10,  0]], [[-10,  0], [ 10,  0]]) == undef);
-    assert(line_segment_intersection([[-10, 10], [ 10, 10]], [[-10,-10], [ 10,-10]]) == undef);
-    assert(line_segment_intersection([[-10,-10], [ -1, -1]], [[ 10,-10], [  1, -1]]) == undef);
-    assert(line_segment_intersection([[-10,-10], [ 10, 10]], [[ 10,-10], [-10, 10]]) == [0,0]);
-    assert(line_segment_intersection([[ -8,  0], [ 12,  4]], [[ 12,  0], [ -8,  4]]) == [2,2]);
-    assert(line_segment_intersection([[-10,-10], [ 10, 10]], [[ 10,-10], [  1, -1]]) == undef);
-    assert(line_segment_intersection([[-10,-10], [ 10, 10]], [[ 10,-10], [ -1,  1]]) == [0,0]);
-}
-*test_line_segment_intersection();
 
 
 module test_line_closest_point() {
@@ -456,19 +415,14 @@ module test_line_closest_point() {
     assert(approx(line_closest_point([[-10,-20], [10,20]], [1,2]+[-2,1]), [1,2]));
     assert(approx(line_closest_point([[-10,-20], [10,20]], [1,2]+[2,-1]), [1,2]));
     assert(approx(line_closest_point([[-10,-20], [10,20]], [13,31]), [15,30]));
+    assert(approx(line_closest_point([[-10,-10], [10,10]], [1,-1],SEGMENT), [0,0]));
+    assert(approx(line_closest_point([[-10,-10], [10,10]], [-1,1],SEGMENT), [0,0]));
+    assert(approx(line_closest_point([[-10,-20], [10,20]], [1,2]+[-2,1],SEGMENT), [1,2]));
+    assert(approx(line_closest_point([[-10,-20], [10,20]], [1,2]+[2,-1],SEGMENT), [1,2]));
+    assert(approx(line_closest_point([[-10,-20], [10,20]], [13,31],SEGMENT), [10,20]));
+    assert(approx(line_closest_point([[-10,-20], [10,20]], [15,25],SEGMENT), [10,20]));
 }
 *test_line_closest_point();
-
-
-module test_segment_closest_point() {
-    assert(approx(segment_closest_point([[-10,-10], [10,10]], [1,-1]), [0,0]));
-    assert(approx(segment_closest_point([[-10,-10], [10,10]], [-1,1]), [0,0]));
-    assert(approx(segment_closest_point([[-10,-20], [10,20]], [1,2]+[-2,1]), [1,2]));
-    assert(approx(segment_closest_point([[-10,-20], [10,20]], [1,2]+[2,-1]), [1,2]));
-    assert(approx(segment_closest_point([[-10,-20], [10,20]], [13,31]), [10,20]));
-    assert(approx(segment_closest_point([[-10,-20], [10,20]], [15,25]), [10,20]));
-}
-*test_segment_closest_point();
 
 module test_circle_2tangents() {
 //** missing tests with arg tangent=true
@@ -491,7 +445,7 @@ module test_circle_3points() {
     radii = rands(10,100,count,seed_value=390);
     angles = rands(0,360,count,seed_value=699);
     // 2D tests.
-    for(i = list_range(count)) {
+    for(i = count(count)) {
         cp = select(coords,i,i+1);
         r = radii[i];
         angs = sort(select(angles,i,i+2));
@@ -516,7 +470,7 @@ module test_circle_3points() {
             assert(approx(res[2], UP));
         }
     }
-    for(i = list_range(count)) {
+    for(i = count(count)) {
         cp = select(coords,i,i+1);
         r = radii[i];
         angs = sort(select(angles,i,i+2));
@@ -542,7 +496,7 @@ module test_circle_3points() {
         }
     }
     // 3D tests.
-    for(i = list_range(count)) {
+    for(i = count(count)) {
         cp = select(coords,i,i+2);
         r = radii[i];
         nrm = unit(select(coords,i+10,i+12));
@@ -569,7 +523,7 @@ module test_circle_3points() {
             assert(approx(res[2], n));
         }
     }
-    for(i = list_range(count)) {
+    for(i = count(count)) {
         cp = select(coords,i,i+2);
         r = radii[i];
         nrm = unit(select(coords,i+10,i+12));
@@ -606,7 +560,10 @@ module test_circle_point_tangents() {
         [[0,0],  50, [50*sqrt(2),0],    [polar_to_xy(50,45), polar_to_xy(50,-45)]],
         [[5,10], 50, [5+50*sqrt(2),10], [[5,10]+polar_to_xy(50,45), [5,10]+polar_to_xy(50,-45)]],
         [[0,0],  50, [0,50*sqrt(2)],    [polar_to_xy(50,135), polar_to_xy(50,45)]],
-        [[5,10], 50, [5,10+50*sqrt(2)], [[5,10]+polar_to_xy(50,135), [5,10]+polar_to_xy(50,45)]]
+        [[5,10], 50, [5,10+50*sqrt(2)], [[5,10]+polar_to_xy(50,135), [5,10]+polar_to_xy(50,45)]],
+        [[5,10], 50, [5,10+50*sqrt(2)], [[5,10]+polar_to_xy(50,135), [5,10]+polar_to_xy(50,45)]],
+        [[5,10], 50, [5, 60],           [[5, 60]]],
+        [[5,10], 50, [5, 59],           []],
     ];
     for (v = testvals) {
         cp = v[0]; r  = v[1]; pt = v[2]; expect = v[3];
@@ -617,93 +574,24 @@ module test_circle_point_tangents() {
 *test_circle_point_tangents();
 
 
-module test_tri_calc() {
-    sides = rands(1,100,100,seed_value=8888);
-    for (p=pair_wrap(sides)) {
-        opp = p[0];
-        adj = p[1];
-        hyp = norm([opp,adj]);
-        ang = acos(adj/hyp);
-        ang2 = 90-ang;
-        expected = [adj, opp, hyp, ang, ang2];
-        assert(approx(tri_calc(adj=adj, hyp=hyp), expected));
-        assert(approx(tri_calc(opp=opp, hyp=hyp), expected));
-        assert(approx(tri_calc(adj=adj, opp=opp), expected));
-        assert(approx(tri_calc(adj=adj, ang=ang), expected));
-        assert(approx(tri_calc(opp=opp, ang=ang), expected, eps=1e-8));
-        assert(approx(tri_calc(hyp=hyp, ang=ang), expected));
-        assert(approx(tri_calc(adj=adj, ang2=ang2), expected));
-        assert(approx(tri_calc(opp=opp, ang2=ang2), expected, eps=1e-8));
-        assert(approx(tri_calc(hyp=hyp, ang2=ang2), expected));
-    }
-}
-*test_tri_calc();
-
-
-module test_tri_functions() {
-    sides = rands(1,100,100,seed_value=8181);
-    for (p = pair_wrap(sides)) {
-        adj = p.x;
-        opp = p.y;
-        hyp = norm([opp,adj]);
-        ang = atan2(opp,adj);
-        assert_approx(hyp_opp_to_adj(hyp,opp), adj);
-        assert_approx(hyp_ang_to_adj(hyp,ang), adj);
-        assert_approx(opp_ang_to_adj(opp,ang), adj);
-        assert_approx(hyp_adj_to_opp(hyp,adj), opp);
-        assert_approx(hyp_ang_to_opp(hyp,ang), opp);
-        assert_approx(adj_ang_to_opp(adj,ang), opp);
-        assert_approx(adj_opp_to_hyp(adj,opp), hyp);
-        assert_approx(adj_ang_to_hyp(adj,ang), hyp);
-        assert_approx(opp_ang_to_hyp(opp,ang), hyp);
-        assert_approx(hyp_adj_to_ang(hyp,adj), ang);
-        assert_approx(hyp_opp_to_ang(hyp,opp), ang);
-        assert_approx(adj_opp_to_ang(adj,opp), ang);
-    }
-}
-*test_tri_functions();
-
-
-module test_hyp_opp_to_adj() nil();  // Covered in test_tri_functions()
-module test_hyp_ang_to_adj() nil();  // Covered in test_tri_functions()
-module test_opp_ang_to_adj() nil();  // Covered in test_tri_functions()
-module test_hyp_adj_to_opp() nil();  // Covered in test_tri_functions()
-module test_hyp_ang_to_opp() nil();  // Covered in test_tri_functions()
-module test_adj_ang_to_opp() nil();  // Covered in test_tri_functions()
-module test_adj_opp_to_hyp() nil();  // Covered in test_tri_functions()
-module test_adj_ang_to_hyp() nil();  // Covered in test_tri_functions()
-module test_opp_ang_to_hyp() nil();  // Covered in test_tri_functions()
-module test_hyp_adj_to_ang() nil();  // Covered in test_tri_functions()
-module test_hyp_opp_to_ang() nil();  // Covered in test_tri_functions()
-module test_adj_opp_to_ang() nil();  // Covered in test_tri_functions()
-
-
-module test_triangle_area() {
-    assert(abs(triangle_area([0,0], [0,10], [10,0]) + 50) < EPSILON);
-    assert(abs(triangle_area([0,0], [0,10], [0,15])) < EPSILON);
-    assert(abs(triangle_area([0,0], [10,0], [0,10]) - 50) < EPSILON);
-}
-*test_triangle_area();
-
-
 module test_plane3pt() {
-    assert_std(plane3pt([0,0,20], [0,10,10], [0,0,0]), [1,0,0,0]);
-    assert_std(plane3pt([2,0,20], [2,10,10], [2,0,0]), [1,0,0,2]);
-    assert_std(plane3pt([0,0,0], [10,0,10], [0,0,20]), [0,1,0,0]);
-    assert_std(plane3pt([0,2,0], [10,2,10], [0,2,20]), [0,1,0,2]);
-    assert_std(plane3pt([0,0,0], [10,10,0], [20,0,0]), [0,0,1,0]);
-    assert_std(plane3pt([0,0,2], [10,10,2], [20,0,2]), [0,0,1,2]);
+    assert_approx(plane3pt([0,0,20], [0,10,10], [0,0,0]), [1,0,0,0]);
+    assert_approx(plane3pt([2,0,20], [2,10,10], [2,0,0]), [1,0,0,2]);
+    assert_approx(plane3pt([0,0,0], [10,0,10], [0,0,20]), [0,1,0,0]);
+    assert_approx(plane3pt([0,2,0], [10,2,10], [0,2,20]), [0,1,0,2]);
+    assert_approx(plane3pt([0,0,0], [10,10,0], [20,0,0]), [0,0,1,0]);
+    assert_approx(plane3pt([0,0,2], [10,10,2], [20,0,2]), [0,0,1,2]);
 }
 *test_plane3pt();
 
 module test_plane3pt_indexed() {
     pts = [ [0,0,0], [10,0,0], [0,10,0], [0,0,10] ];
     s13 = sqrt(1/3);
-    assert_std(plane3pt_indexed(pts, 0,3,2), [1,0,0,0]);
-    assert_std(plane3pt_indexed(pts, 0,2,3), [-1,0,0,0]);
-    assert_std(plane3pt_indexed(pts, 0,1,3), [0,1,0,0]);
-    assert_std(plane3pt_indexed(pts, 0,3,1), [0,-1,0,0]);
-    assert_std(plane3pt_indexed(pts, 0,2,1), [0,0,1,0]);
+    assert_approx(plane3pt_indexed(pts, 0,3,2), [1,0,0,0]);
+    assert_approx(plane3pt_indexed(pts, 0,2,3), [-1,0,0,0]);
+    assert_approx(plane3pt_indexed(pts, 0,1,3), [0,1,0,0]);
+    assert_approx(plane3pt_indexed(pts, 0,3,1), [0,-1,0,0]);
+    assert_approx(plane3pt_indexed(pts, 0,2,1), [0,0,1,0]);
     assert_approx(plane3pt_indexed(pts, 0,1,2), [0,0,-1,0]);
     assert_approx(plane3pt_indexed(pts, 3,2,1), [s13,s13,s13,10*s13]);
     assert_approx(plane3pt_indexed(pts, 1,2,3), [-s13,-s13,-s13,-10*s13]);
@@ -716,28 +604,28 @@ module test_plane_from_points() {
     assert_std(plane_from_points([[0,0,0], [10,0,10], [0,0,20], [5,0,7]]), [0,1,0,0]);
     assert_std(plane_from_points([[0,2,0], [10,2,10], [0,2,20], [4,2,3]]), [0,1,0,2]);
     assert_std(plane_from_points([[0,0,0], [10,10,0], [20,0,0], [8,3,0]]), [0,0,1,0]);
-    assert_std(plane_from_points([[0,0,2], [10,10,2], [20,0,2], [3,4,2]]), [0,0,1,2]);
+    assert_std(plane_from_points([[0,0,2], [10,10,2], [20,0,2], [3,4,2]]), [0,0,1,2]);  
 }
 *test_plane_from_points();
 
 
 module test_plane_normal() {
-    assert_std(plane_normal(plane3pt([0,0,20], [0,10,10], [0,0,0])), [1,0,0]);
-    assert_std(plane_normal(plane3pt([2,0,20], [2,10,10], [2,0,0])), [1,0,0]);
-    assert_std(plane_normal(plane3pt([0,0,0], [10,0,10], [0,0,20])), [0,1,0]);
-    assert_std(plane_normal(plane3pt([0,2,0], [10,2,10], [0,2,20])), [0,1,0]);
-    assert_std(plane_normal(plane3pt([0,0,0], [10,10,0], [20,0,0])), [0,0,1]);
-    assert_std(plane_normal(plane3pt([0,0,2], [10,10,2], [20,0,2])), [0,0,1]);
+    assert_approx(plane_normal(plane3pt([0,0,20], [0,10,10], [0,0,0])), [1,0,0]);
+    assert_approx(plane_normal(plane3pt([2,0,20], [2,10,10], [2,0,0])), [1,0,0]);
+    assert_approx(plane_normal(plane3pt([0,0,0], [10,0,10], [0,0,20])), [0,1,0]);
+    assert_approx(plane_normal(plane3pt([0,2,0], [10,2,10], [0,2,20])), [0,1,0]);
+    assert_approx(plane_normal(plane3pt([0,0,0], [10,10,0], [20,0,0])), [0,0,1]);
+    assert_approx(plane_normal(plane3pt([0,0,2], [10,10,2], [20,0,2])), [0,0,1]);
 }
 *test_plane_normal();
 
 
-module test_distance_from_plane() {
+module test_point_plane_distance() {
     plane1 = plane3pt([-10,0,0], [0,10,0], [10,0,0]);
-    assert(distance_from_plane(plane1, [0,0,5]) == 5);
-    assert(distance_from_plane(plane1, [5,5,8]) == 8);
+    assert(point_plane_distance(plane1, [0,0,5]) == 5);
+    assert(point_plane_distance(plane1, [5,5,8]) == 8);
 }
-*test_distance_from_plane();
+*test_point_plane_distance();
 
 
 module test_polygon_line_intersection() {
@@ -787,21 +675,21 @@ module test_coplanar() {
     assert(coplanar([ [5,5,1],[0,0,0],[-1,-1,1] ]) == true);
     assert(coplanar([ [0,0,0],[1,0,1],[1,1,1], [0,1,2] ]) == false);
     assert(coplanar([ [0,0,0],[1,0,1],[1,1,2], [0,1,1] ]) == true);
-}
+ }
 *test_coplanar();
 
 
-module test_in_front_of_plane() {
+module test_above_plane() {
     plane = plane3pt([0,0,0], [0,10,10], [10,0,10]);
-    assert(in_front_of_plane(plane, [5,5,10]) == false);
-    assert(in_front_of_plane(plane, [-5,0,0]) == true);
-    assert(in_front_of_plane(plane, [5,0,0]) == false);
-    assert(in_front_of_plane(plane, [0,-5,0]) == true);
-    assert(in_front_of_plane(plane, [0,5,0]) == false);
-    assert(in_front_of_plane(plane, [0,0,5]) == true);
-    assert(in_front_of_plane(plane, [0,0,-5]) == false);
+    assert(above_plane(plane, [5,5,10]) == false);
+    assert(above_plane(plane, [-5,0,0]) == true);
+    assert(above_plane(plane, [5,0,0]) == false);
+    assert(above_plane(plane, [0,-5,0]) == true);
+    assert(above_plane(plane, [0,5,0]) == false);
+    assert(above_plane(plane, [0,0,5]) == true);
+    assert(above_plane(plane, [0,0,-5]) == false);
 }
-*test_in_front_of_plane();
+*test_above_plane();
 
 
 module test_is_path() {
@@ -842,7 +730,14 @@ module test_cleanup_path() {
 
 module test_polygon_area() {
     assert(approx(polygon_area([[1,1],[-1,1],[-1,-1],[1,-1]]), 4));
-    assert(approx(polygon_area(circle(r=50,$fn=1000)), -PI*50*50, eps=0.1));
+    assert(approx(polygon_area(circle(r=50,$fn=1000),signed=true), -PI*50*50, eps=0.1));
+    assert(approx(polygon_area(rot([13,27,75],
+                               p=path3d(circle(r=50,$fn=1000),fill=23)),
+                               signed=true), PI*50*50, eps=0.1));
+    assert(abs(triangle_area([0,0], [0,10], [10,0]) + 50) < EPSILON);
+    assert(abs(triangle_area([0,0], [0,10], [0,15])) < EPSILON);
+    assert(abs(triangle_area([0,0], [10,0], [0,10]) - 50) < EPSILON);
+    
 }
 *test_polygon_area();
 
@@ -850,7 +745,9 @@ module test_polygon_area() {
 module test_is_convex_polygon() {
     assert(is_convex_polygon([[1,1],[-1,1],[-1,-1],[1,-1]]));
     assert(is_convex_polygon(circle(r=50,$fn=1000)));
+    assert(is_convex_polygon(rot([50,120,30], p=path3d(circle(1,$fn=50)))));
     assert(!is_convex_polygon([[1,1],[0,0],[-1,1],[-1,-1],[1,-1]]));
+    assert(!is_convex_polygon([for (i=[0:36]) let(a=-i*10) (10+i)*[cos(a),sin(a)]])); //   spiral 
 }
 *test_is_convex_polygon();
 
@@ -916,8 +813,7 @@ module test_centroid() {
     assert_approx(centroid(circle(d=100)), [0,0]);
     assert_approx(centroid(rect([40,60],rounding=10,anchor=LEFT)), [20,0]);
     assert_approx(centroid(rect([40,60],rounding=10,anchor=FWD)), [0,30]);
-    poly = [for(a=[0:90:360]) 
-              move([1,2.5,3.1], rot(p=[cos(a),sin(a),0],from=[0,0,1],to=[1,1,1])) ];
+    poly = move([1,2.5,3.1],p=rot([12,49,24], p=path3d(circle(10,$fn=33))));
     assert_approx(centroid(poly), [1,2.5,3.1]);
 }
 *test_centroid();
@@ -943,19 +839,22 @@ module test_point_in_polygon() {
     poly2 = [ [-3,-3],[2,-3],[2,1],[-1,1],[-1,-1],[1,-1],[1,2],[-3,2] ];
     assert(point_in_polygon([0,0], poly) == 1);
     assert(point_in_polygon([20,0], poly) == -1);
-    assert(point_in_polygon([20,0], poly,EPSILON,nonzero=false) == -1);
+    assert(point_in_polygon([20,0], poly,nonzero=false) == -1);
     assert(point_in_polygon([5,5], poly) == 1);
     assert(point_in_polygon([-5,5], poly) == 1);
     assert(point_in_polygon([-5,-5], poly) == 1);
     assert(point_in_polygon([5,-5], poly) == 1);
-    assert(point_in_polygon([5,-5], poly,EPSILON,nonzero=false) == 1);
+    assert(point_in_polygon([5,-5], poly,nonzero=false,eps=EPSILON) == 1);
     assert(point_in_polygon([-10,-10], poly) == -1);
     assert(point_in_polygon([10,0], poly) == 0);
     assert(point_in_polygon([0,10], poly) == 0);
     assert(point_in_polygon([0,-10], poly) == 0);
-    assert(point_in_polygon([0,-10], poly,EPSILON,nonzero=false) == 0);
-    assert(point_in_polygon([0,0], poly2,EPSILON,nonzero=true) == 1);
-    assert(point_in_polygon([0,0], poly2,EPSILON,nonzero=false) == -1);
+    assert(point_in_polygon([0,-10], poly,nonzero=false) == 0);
+    assert(point_in_polygon([0,0], poly2,nonzero=true) == 1);
+    assert(point_in_polygon([0,1], poly2,nonzero=true) == 0);
+    assert(point_in_polygon([0,1], poly2,nonzero=false) == 0);
+    assert(point_in_polygon([1,0], poly2,nonzero=false) == 0);
+    assert(point_in_polygon([0,0], poly2,nonzero=false,eps=EPSILON) == -1);
 }
 *test_point_in_polygon();
 
@@ -991,8 +890,8 @@ module test_pointlist_bounds() {
 
 
 module test_closest_point() {
-    ptlist = [for (i=list_range(100)) rands(-100,100,2,seed_value=8463)];
-    testpts = [for (i=list_range(100)) rands(-100,100,2,seed_value=6834)];
+    ptlist = [for (i=count(100)) rands(-100,100,2,seed_value=8463+i)];
+    testpts = [for (i=count(100)) rands(-100,100,2,seed_value=6834+i)];
     for (pt = testpts) {
         pidx = closest_point(pt,ptlist);
         dists = [for (p=ptlist) norm(pt-p)];
@@ -1004,8 +903,8 @@ module test_closest_point() {
 
 
 module test_furthest_point() {
-    ptlist = [for (i=list_range(100)) rands(-100,100,2,seed_value=8463)];
-    testpts = [for (i=list_range(100)) rands(-100,100,2,seed_value=6834)];
+    ptlist = [for (i=count(100)) rands(-100,100,2,seed_value=8463+i)];
+    testpts = [for (i=count(100)) rands(-100,100,2,seed_value=6834+i)];
     for (pt = testpts) {
         pidx = furthest_point(pt,ptlist);
         dists = [for (p=ptlist) norm(pt-p)];
@@ -1063,6 +962,44 @@ module test_is_region() {
 }
 *test_is_region();
 
+module test_convex_distance() {
+// 2D
+    c1 = circle(10,$fn=24);
+    c2 = move([15,0], p=c1);
+    assert(convex_distance(c1, c2)==0);
+    c3 = move([22,0],c1);
+    assert_approx(convex_distance(c1, c3),2);
+// 3D
+    s1 = sphere(10,$fn=4);
+    s2 = move([15,0], p=s1);
+    assert_approx(convex_distance(s1[0], s2[0]), 0.857864376269);
+    s3 = move([25.3,0],s1);
+    assert_approx(convex_distance(s1[0], s3[0]), 11.1578643763);
+    s4 = move([30,25],s1);    
+    assert_approx(convex_distance(s1[0], s4[0]), 28.8908729653);
+    s5 = move([10*sqrt(2),0],s1);    
+    assert_approx(convex_distance(s1[0], s5[0]), 0);
+}
+*test_convex_distance();
 
+module test_convex_collision() {
+// 2D
+    c1 = circle(10,$fn=24);
+    c2 = move([15,0], p=c1);
+    assert(convex_collision(c1, c2));
+    c3 = move([22,0],c1);
+    assert(!convex_collision(c1, c3));
+// 3D
+    s1 = sphere(10,$fn=4);
+    s2 = move([15,0], p=s1);
+    assert(!convex_collision(s1[0], s2[0]));
+    s3 = move([25.3,0],s1);
+    assert(!convex_collision(s1[0], s3[0]));
+    s4 = move([5,0],s1);    
+    assert(convex_collision(s1[0], s4[0]));
+    s5 = move([10*sqrt(2),0],s1);    
+    assert(convex_collision(s1[0], s5[0]));
+}
+*test_convex_distance();
 
 // vim: expandtab tabstop=4 shiftwidth=4 softtabstop=4 nowrap

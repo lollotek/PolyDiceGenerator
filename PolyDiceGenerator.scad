@@ -198,7 +198,7 @@ d6_text_h_push=0;
 d6_text_spacing=1; //[0.5:0.02:1.5]
 d6_num_4_h_push=-3;
 d6_angle_text=false; //angle d6 text
-d6_text=["1","3","5","2","4","6"];
+d6_text=["1", "2", "4", "5", "6", "3"];
 d6_symbols=[undef,undef,undef,undef,undef,undef];
 d6_symbol_size=62;
 d6_symbol_v_push=0;
@@ -213,7 +213,7 @@ d6_pips=[" "," "," "," "," "," "];
 d6_pip_sides=6; //[0,3,4,5,6,8,10,12]
 d6_pip_size=20;
 d6_pip_offset=2.5;
-d6_pip_symbol_pos=["1","3","5","2","4","6"];
+d6_pip_symbol_pos=["1", "2", "4", "5", "6", "3"];
 d6_pip_symbols=[undef,undef,undef,undef,undef,undef]; //symbols for pips
 d6_pip_symbol_rotate=[0,0,0,0,0,0];
 d6_adj_size=[0,0,0,0,0,0];
@@ -343,17 +343,17 @@ d20_text_v_push=0;
 d20_text_h_push=0;
 d20_text_spacing=1; //[0.5:0.02:1.5]
 d20_num_4_h_push=-3;
-d20_text=["1","5","13","11","7","15","19","6","9","18","4","14","17","16","3","12","2","20","8","10"];
+d20_text=["1", "7", "3", "19", "17", "13", "5", "15", "6", "9", "16", "11", "4", "18", "10", "12", "14", "2", "8", "20"];
 d20_symbols=[undef,undef,undef,undef,undef,undef,undef,undef,undef,undef,undef,undef,undef,undef,undef,undef,undef,undef,undef,undef];
 d20_symbol_size=23;
 d20_symbol_v_push=0;
 d20_symbol_h_push=0;
-d20_underscores=[" "," "," "," "," "," "," ","_","_"," "," "," "," "," "," "," "," "," "," "," "];
+d20_underscores=[" ", " ", " ", " ", " ", " ", " ", " ", "_", "_", " ", " ", " ", " ", " ", " ", " ", " ", " ", " "];
 d20_underscore_size=18;
 d20_underscore_v_push=-12;
 d20_underscore_h_push=0;
-d20_bumpers=[true,true,true,false,true,true,false,false,false,false,false,false,false,false,false,false,false,false,false,false];
-d20_rotate=[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+d20_bumpers=["true", "true", "true", "true", "true", "false", "false", "false", "false", "false", "false", "false", "false", "false", "false", "false", "false", "false", "false", "false"];
+d20_rotate=[200, 280, 40, 40, 160, 40, 280, 240, 325, 240, 45, 40, 240, 250, 205, 165, 40, 220, 160, 60];
 d20_adj_size=[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
 d20_adj_v_push=[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
 d20_adj_h_push=[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
@@ -443,7 +443,7 @@ under_font=str_strip(underscore_font,"\"");
 sym_font=str_strip(symbol_font,"\"");
 
 module printer_prismoid(
-    path, width=1, closed=false, side_len
+    path, width=1, closed=false, side_len, spacing
 ) {
     assert(is_bool(closed));
     assert(is_list(path));
@@ -458,57 +458,29 @@ module printer_prismoid(
     start_vec = select(path,0) - select(path,1);
     end_vec = select(path,-1) - select(path,-2);
 
-    plane_normal = vector_axis([path[0],path[1],path[2]]);
-    echo(">>>", plane_normal);
-   // echo("orient", orient(path));
-    // Straight segments
-    //for (i = idx(path,end=-2)) {
-    for (i = [2:2]){
-        vec_dir = unit(path[i+1]-path[i]);
-        echo("vec_dir",  vec_dir);
+    plane_normal = polygon_normal(path); // vector_axis([path[0],path[1],path[2]]);
 
-        start_dir=unit([1, 0 ,0]); //path[1]-path[0]);
-        echo("start_dir",  start_dir);
+    flat_path = project_plane(plane_from_normal(plane_normal), path);
 
-        vec_center_path = v_mul(vec_dir, [side_len/2, side_len/2, side_len/2]);
-        echo("vec_center_path", vec_center_path );
-
-        center_angle = vector_angle(start_dir, vec_dir);
-        echo("center_angle", center_angle);
-        // vec_center_angle = v_mul(plane_normal, [center_angle, center_angle, center_angle]);
-        // echo("vec_center_angle", vec_center_angle);
+    for (i = idx(path,e=-2)) {
+    // for (i = [1:1]){
+        vec_dir = unit(select(path,i+1)-select(path,i));
         
-        /*
-        vec1 = i==0? UP : unit(path[i]-path[i-1], UP);
-        vec2 = unit(path[i+1]-path[i], UP);
-        axis = vector_axis(vec1,vec2);
-        ang = vector_angle(vec1,vec2);
-        // echo(rotmats[i]);
-        echo("axis", axis);
-        echo("ang", ang);*/
-        echo("----");
-        dist = norm(path[i+1] - path[i]);
-        //$fn = 3;
-        //translate(vec_center_path) {
-            //translate(path[i]) {
-                //rotate(vec_center_angle){
-                //rotate([0,90,0]){
-                    //rot(from=[1, 0, 0], to=vec_center_angle)
-                    translate(vec_center_path) 
-                    translate(path[i]) 
-                    orient(plane_normal)
-                    // rot([0,0,center_angle], from=[0,0,1], to=plane_normal)
-                    prismoid(
-                        size1=[side_len, 0],
-                        size2=[side_len,width[0]],
-                        h=width[0],
-                        anchor=(BOTTOM * 1)
-                    ); //, anchor=LEFT+(BOTTOM * 1), orient=LEFT);
-                    //anchor_arrow();
+        flat_vec_dir = flat_path[i+1]-flat_path[i];
+        vec_center_path = v_mul(vec_dir, [side_len/2, side_len/2, side_len/2]);
+        
+        translate(vec_center_path) 
+        translate(path[i]) 
+        orient(plane_normal)
+        rot(v_theta(flat_vec_dir))
+        rot([-45,0,0])
+        prismoid(
+            size1=[side_len, 0],
+            size2=[side_len,width[0]],
+            h=width[0],
+            anchor=(BOTTOM * spacing)
+        );
 
-                //}
-            //}
-        //}
    }
 }
 
@@ -916,24 +888,21 @@ module drawd6(){
     
     difference()
     {
-        if(add_bumpers && edge_rounding==0 && corner_rounding==0 && corner_clipping==0)
-            //render bumpers
+        if(edge_rounding==0 && corner_rounding==0 && corner_clipping==0)
+            //render bumpers|printing edges
             union()
             {
                 regular_polyhedron("cube",side=d6_size,anchor=BOTTOM);
-                regular_polyhedron("cube",side=d6_size,anchor=BOTTOM,rotate_children=false,draw=false)
-                if(bumpers[$faceindex]) stroke($face,width=bumper_size,closed=true);
+                if (add_bumpers){
+                    regular_polyhedron("cube",side=d6_size,anchor=BOTTOM,rotate_children=false,draw=false)
+                    if(bumpers[$faceindex]) stroke($face,width=bumper_size,closed=true);
+                }
+                if(add_printer_edges){
+                    regular_polyhedron("cube",side=d6_size,anchor=BOTTOM,rotate_children=false, draw=false)
+                        if(bumpers[$faceindex]) printer_prismoid(path=$face, width=edge_size, closed=true, side_len=d6_size, spacing=edge_fix);
+                }
             }
-        if(add_printer_edges)
-            //render printer_edges
-            union()
-            {
-                regular_polyhedron("cube",side=d6_size,anchor=BOTTOM);
-                // translate([0,0,-edge_size/2]) regular_polyhedron("cube",side=d6_size+edge_size+edge_fix,anchor=BOTTOM,rotate_children=false, draw=false)
-                regular_polyhedron("cube",side=d6_size,anchor=BOTTOM,rotate_children=false, draw=false)
-                if(bumpers[$faceindex])
-                #printer_prismoid(path=$face, width=edge_size, closed=true, side_len=d6_size);
-            }
+        
         else if(edge_rounding==0 && (corner_rounding>0 || corner_clipping>0))
             //render clipping objects
             intersection()
@@ -1021,13 +990,13 @@ module drawd8(){
                 if(bumpers[$faceindex]) stroke($face,width=bumper_size,closed=true);
             }
         if(add_printer_edges)
-        union()
-        {
-            regular_polyhedron("octahedron",side=d8_side,anchor=BOTTOM);
-            regular_polyhedron("octahedron",side=d8_side,anchor=BOTTOM,rotate_children=false,draw=false)
-            if(bumpers[$faceindex])
-            #printer_prismoid(path=$face, width=edge_size, closed=true, side_len=d8_side);
-        }
+            union()
+            {
+                regular_polyhedron("octahedron",side=d8_side,anchor=BOTTOM);
+                regular_polyhedron("octahedron",side=d8_side,anchor=BOTTOM,rotate_children=false,draw=false)
+                if(bumpers[$faceindex])
+                printer_prismoid(path=$face, width=edge_size, closed=true, side_len=d8_side);
+            }
         else if(edge_rounding==0 && (corner_rounding>0 || corner_clipping>0))
             //render clipping objects
             intersection()
@@ -1404,22 +1373,20 @@ module drawd20(){
     
     difference()
     {
-        if(add_bumpers && edge_rounding==0 && corner_rounding==0 && corner_clipping==0)
+        if(edge_rounding==0 && corner_rounding==0 && corner_clipping==0)
             //render bumpers
             union()
             {
                 regular_polyhedron("icosahedron",ir=d20_size/2,anchor=BOTTOM);
-                regular_polyhedron("icosahedron",ir=d20_size/2,anchor=BOTTOM,rotate_children=false,draw=false)
-                if(bumpers[$faceindex]) stroke($face,width=bumper_size,closed=true);
-            }
-        if(add_printer_edges)
-            //render printer_edges
-            union()
-            {
-                regular_polyhedron("icosahedron",ir=d20_size/2,anchor=BOTTOM);
-                regular_polyhedron("icosahedron",ir=d20_size/2,anchor=BOTTOM,rotate_children=false,draw=false)
-                if(bumpers[$faceindex])
-                #printer_prismoid(path=$face, width=edge_size, closed=true, side_len=d20_side);
+                if (add_bumpers){
+                    regular_polyhedron("icosahedron",ir=d20_size/2,anchor=BOTTOM,rotate_children=false,draw=false)
+                    if(bumpers[$faceindex]) stroke($face,width=bumper_size,closed=true);
+                }
+                if(add_printer_edges){
+                    regular_polyhedron("icosahedron",ir=d20_size/2,anchor=BOTTOM,rotate_children=false,draw=false)
+                    if(bumpers[$faceindex])
+                    printer_prismoid(path=$face, width=edge_size, closed=true, side_len=d20_side);
+                }
             }
         else if(edge_rounding==0 && (corner_rounding>0 || corner_clipping>0))
             //render clipping objects

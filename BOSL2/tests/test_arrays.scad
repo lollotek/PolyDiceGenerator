@@ -27,6 +27,20 @@ module test_select() {
 }
 test_select();
 
+
+module test_slice() {
+    l = [3,4,5,6,7,8,9];
+    assert(slice(l, 5, 6) == [8,9]);
+    assert(slice(l, 5, 8) == [8,9]);
+    assert(slice(l, 5, 2) == []);
+    assert(slice(l, -3, -1) == [7,8,9]);
+    assert(slice(l, 3, 3) == [6]);
+    assert(slice(l, 4) == [7,8,9]);
+    assert(slice(l, -2) == [8,9]);
+}
+test_slice();
+
+
 module test_last() {
     list = [1,2,3,4];
     assert(last(list)==4);
@@ -34,24 +48,33 @@ module test_last() {
 }
 test_last();
 
-module test_delete_last() {
+
+module test_list_head() {
     list = [1,2,3,4];
-    assert(delete_last(list) == [1,2,3]);
-    assert(delete_last([1]) == []);
-    assert(delete_last([]) == []);
+    assert_equal(list_head(list), [1,2,3]);
+    assert_equal(list_head([1]), []);
+    assert_equal(list_head([]), []);
+    assert_equal(list_head(list,-3), [1,2]);
+    assert_equal(list_head(list,1), [1,2]);
+    assert_equal(list_head(list,2), [1,2,3]);
+    assert_equal(list_head(list,6), [1,2,3,4]);
+    assert_equal(list_head(list,-6), []);
 }
-test_delete_last();
+test_list_head();
 
 
-module test_slice() {
-    assert(slice([3,4,5,6,7,8,9], 3, 5) == [6,7]);
-    assert(slice([3,4,5,6,7,8,9], 2, -1) == [5,6,7,8,9]);
-    assert(slice([3,4,5,6,7,8,9], 1, 1) == []);
-    assert(slice([3,4,5,6,7,8,9], 6, -1) == [9]);
-    assert(slice([3,4,5,6,7,8,9], 2, -2) == [5,6,7,8]);
-    assert(slice([], 2, -2) == []);
+module test_list_tail() {
+    list = [1,2,3,4];
+    assert_equal(list_tail(list), [2,3,4]);
+    assert_equal(list_tail([1]), []);
+    assert_equal(list_tail([]), []);
+    assert_equal(list_tail(list,-3), [2,3,4]);
+    assert_equal(list_tail(list,2), [3,4]);
+    assert_equal(list_tail(list,3), [4]);
+    assert_equal(list_tail(list,6), []);
+    assert_equal(list_tail(list,-6), [1,2,3,4]);
 }
-test_slice();
+test_list_tail();
 
 
 module test_in_list() {
@@ -110,19 +133,13 @@ module test_repeat() {
 test_repeat();
 
 
-module test_list_range() {
-    assert(list_range(4) == [0,1,2,3]);
-    assert(list_range(n=4, step=2) == [0,2,4,6]);
-    assert(list_range(n=4, s=3, step=3) == [3,6,9,12]);
-    assert(list_range(e=3) == [0,1,2,3]);
-    assert(list_range(e=6, step=2) == [0,2,4,6]);
-    assert(list_range(s=3, e=5) == [3,4,5]);
-    assert(list_range(s=3, e=8, step=2) == [3,5,7]);
-    assert(list_range(s=4, e=8, step=2) == [4,6,8]);
-    assert(list_range(e=4, n=3) == [0,2,4]);
-    assert(list_range(n=4, s=[3,4], step=[2,3]) == [[3,4], [5,7], [7,10], [9,13]]);
+module test_count() {
+    assert_equal(count(5), [0,1,2,3,4]);
+    assert_equal(count(5,3), [3,4,5,6,7]);
+    assert_equal(count(4,3,2), [3,5,7,9]);
+    assert_equal(count(5,0,0.25), [0, 0.25, 0.5, 0.75, 1.0]);
 }
-test_list_range();
+test_count();
 
 
 module test_reverse() {
@@ -266,9 +283,9 @@ test_list_fit();
 module test_idx() {
     colors = ["red", "green", "blue", "cyan"];
     assert([for (i=idx(colors)) i] == [0,1,2,3]);
-    assert([for (i=idx(colors,end=-2)) i] == [0,1,2]);
-    assert([for (i=idx(colors,start=1)) i] == [1,2,3]);
-    assert([for (i=idx(colors,start=1,end=-2)) i] == [1,2]);
+    assert([for (i=idx(colors,e=-2)) i] == [0,1,2]);
+    assert([for (i=idx(colors,s=1)) i] == [1,2,3]);
+    assert([for (i=idx(colors,s=1,e=-2)) i] == [1,2]);
 }
 test_idx();
 
@@ -282,7 +299,7 @@ test_enumerate();
 
 
 module test_shuffle() {
-    nums1 = [for (i=list_range(100)) i];
+    nums1 = count(100);
     nums2 = shuffle(nums1,33);
     nums3 = shuffle(nums2,99);
     assert(sort(nums2)==nums1);
@@ -341,11 +358,21 @@ module test_sortidx() {
 }
 test_sortidx();
 
+module test_group_sort() {
+    assert_equal(group_sort([]), [[]]);
+    assert_equal(group_sort([8]), [[8]]);
+    assert_equal(group_sort([7,3,9,4,3,1,8]), [[1], [3, 3], [4], [7], [8], [9]]);
+    assert_equal(group_sort([[5,"a"],[2,"b"], [5,"c"], [3,"d"], [2,"e"] ], idx=0), [[[2, "b"], [2, "e"]], [[3, "d"]], [[5, "a"], [5, "c"]]]);
+    assert_equal(group_sort([["a",5],["b",6], ["c",1], ["d",2], ["e",6] ], idx=1), [[["c", 1]], [["d", 2]], [["a", 5]], [["b", 6], ["e", 6]]] );
+}
+test_group_sort();
+
 
 module test_unique() {
-    assert(unique([]) == []);
-    assert(unique([8]) == [8]);
-    assert(unique([7,3,9,4,3,1,8]) == [1,3,4,7,8,9]);
+    assert_equal(unique([]), []);
+    assert_equal(unique([8]), [8]);
+    assert_equal(unique([7,3,9,4,3,1,8]), [1,3,4,7,8,9]);
+    assert_equal(unique(["A","B","R","A","C","A","D","A","B","R","A"]), ["A", "B", "C", "D", "R"]);
 }
 test_unique();
 
@@ -449,36 +476,30 @@ test_force_list();
 module test_pair() {
     assert(pair([3,4,5,6]) == [[3,4], [4,5], [5,6]]);
     assert(pair("ABCD") == [["A","B"], ["B","C"], ["C","D"]]);
+    assert(pair([3,4,5,6],true) == [[3,4], [4,5], [5,6], [6,3]]);
+    assert(pair("ABCD",true) == [["A","B"], ["B","C"], ["C","D"], ["D","A"]]);
+    assert(pair([3,4,5,6],wrap=true) == [[3,4], [4,5], [5,6], [6,3]]);
+    assert(pair("ABCD",wrap=true) == [["A","B"], ["B","C"], ["C","D"], ["D","A"]]);
 }
 test_pair();
-
-
-module test_pair_wrap() {
-    assert(pair_wrap([3,4,5,6]) == [[3,4], [4,5], [5,6], [6,3]]);
-    assert(pair_wrap("ABCD") == [["A","B"], ["B","C"], ["C","D"], ["D","A"]]);
-}
-test_pair_wrap();
 
 
 module test_triplet() {
     assert(triplet([3,4,5,6,7]) == [[3,4,5], [4,5,6], [5,6,7]]);
     assert(triplet("ABCDE") == [["A","B","C"], ["B","C","D"], ["C","D","E"]]);
+    assert(triplet([3,4,5,6],true) == [[3,4,5], [4,5,6], [5,6,3], [6,3,4]]);
+    assert(triplet("ABCD",true) == [["A","B","C"], ["B","C","D"], ["C","D","A"], ["D","A","B"]]);
+    assert(triplet([3,4,5,6],wrap=true) == [[3,4,5], [4,5,6], [5,6,3], [6,3,4]]);
+    assert(triplet("ABCD",wrap=true) == [["A","B","C"], ["B","C","D"], ["C","D","A"], ["D","A","B"]]);
 }
 test_triplet();
 
 
-module test_triplet_wrap() {
-    assert(triplet_wrap([3,4,5,6]) == [[3,4,5], [4,5,6], [5,6,3], [6,3,4]]);
-    assert(triplet_wrap("ABCD") == [["A","B","C"], ["B","C","D"], ["C","D","A"], ["D","A","B"]]);
+module test_combinations() {
+    assert(combinations([3,4,5,6]) ==  [[3,4],[3,5],[3,6],[4,5],[4,6],[5,6]]);
+    assert(combinations([3,4,5,6],n=3) == [[3,4,5],[3,4,6],[3,5,6],[4,5,6]]);
 }
-test_triplet_wrap();
-
-
-module test_permute() {
-    assert(permute([3,4,5,6]) ==  [[3,4],[3,5],[3,6],[4,5],[4,6],[5,6]]);
-    assert(permute([3,4,5,6],n=3) == [[3,4,5],[3,4,6],[3,5,6],[4,5,6]]);
-}
-test_permute();
+test_combinations();
 
 
 module test_repeat_entries() {
@@ -501,15 +522,36 @@ module test_zip() {
     assert(zip([v1,v2],fit="long", fill=0) == [[1,5],[2,6],[3,7],[4,0]]);
     assert(zip([v1,v2,v3],fit="long") == [[1,5,8],[2,6,9],[3,7,10],[4,undef,11]]);
 }
-test_zip();
+//test_zip();
+
+module test_hstack() {
+    M = ident(3);
+    v1 = [2,3,4];
+    v2 = [5,6,7];
+    v3 = [8,9,10];
+    a = hstack(v1,v2);   
+    b = hstack(v1,v2,v3);
+    c = hstack([M,v1,M]);
+    d = hstack(subindex(M,0), subindex(M,[1, 2]));
+    assert_equal(a,[[2, 5], [3, 6], [4, 7]]);
+    assert_equal(b,[[2, 5, 8], [3, 6, 9], [4, 7, 10]]);
+    assert_equal(c,[[1, 0, 0, 2, 1, 0, 0], [0, 1, 0, 3, 0, 1, 0], [0, 0, 1, 4, 0, 0, 1]]);
+    assert_equal(d,M);
+    strmat = [["three","four"], ["five","six"]];
+    assert_equal(hstack(strmat,strmat), [["three", "four", "three", "four"], ["five", "six", "five", "six"]]);
+    strvec = ["one","two"];
+    assert_equal(hstack(strvec,strmat),[["o", "n", "e", "three", "four"], ["t", "w", "o", "five", "six"]]);
+}
+test_hstack();
+
 
 module test_block_matrix() {
     A = [[1,2],[3,4]];
     B = ident(2);
     assert_equal(block_matrix([[A,B],[B,A],[A,B]]), [[1,2,1,0],[3,4,0,1],[1,0,1,2],[0,1,3,4],[1,2,1,0],[3,4,0,1]]);
     assert_equal(block_matrix([[A,B],ident(4)]), [[1,2,1,0],[3,4,0,1],[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]);
-    text = [["a","b"],["c","d"]];
-    assert_equal(block_matrix([[text,B]]), [["a","b",1,0],["c","d",0,1]]);
+    text = [["aa","bb"],["cc","dd"]];
+    assert_equal(block_matrix([[text,B]]), [["aa","bb",1,0],["cc","dd",0,1]]);
 }
 test_block_matrix();
 
@@ -545,6 +587,15 @@ module test_array_group() {
     assert(array_group(v,4,0) == [[1,2,3,4], [5,6,0,0]]);
 }
 test_array_group();
+
+
+module test_group_data() {
+    assert_equal(group_data([1,2,0], ["A","B","C"]), [["C"],["A"],["B"]]);
+    assert_equal(group_data([1,3,0], ["A","B","C"]), [["C"],["A"],[],["B"]]);
+    assert_equal(group_data([5,3,1], ["A","B","C"]), [[],["C"],[],["B"],[],["A"]]);
+    assert_equal(group_data([1,3,1], ["A","B","C"]), [[],["A","C"],[],["B"]]);
+}
+test_group_data();
 
 
 module test_flatten() {

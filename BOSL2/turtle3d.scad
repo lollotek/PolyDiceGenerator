@@ -90,7 +90,7 @@ function _rotpart(T) = [for(i=[0:3]) [for(j=[0:3]) j<3 || i==3 ? T[i][j] : 0]];
 //   "xjump"    |  | x                  | Move the turtle's x position to the specified value
 //   "yjump     |  | y                  | Move the turtle's y position to the specified value
 //   "zjump     |  | y                  | Move the turtle's y position to the specified value
-//   "left"        | [angle]            | Turn turtle left by specified angle or default angle
+//   "left"     |  | [angle]            | Turn turtle left by specified angle or default angle
 //   "right"    |  | [angle]            | Turn turtle to the right by specified angle or default angle
 //   "up"       |  | [angle]            | Turn turtle up by specified angle or default angle
 //   "down"     |  | [angle]            | Turn turtle down by specified angle or default angle
@@ -421,8 +421,8 @@ turtle state: sequence of transformations ("path") so far
 
 function _turtle3d_state_valid(state) =
     is_list(state)
-        && is_list_of(state[0],ident(4))
-        && is_list_of(state[1],ident(4))
+        && is_consistent(state[0],ident(4))
+        && is_consistent(state[1],ident(4))
         && is_num(state[2])
         && is_num(state[3])
         && is_num(state[4]);
@@ -433,7 +433,7 @@ function turtle3d(commands, state=RIGHT, transforms=false, full_state=false, rep
        state = is_matrix(state,4,4) ? [[state],[yrot(90)],1,90,0] :
                is_vector(state,3) ?
                   let( updir = UP - (UP * state) * state / (state*state) )
-                  [[affine_frame_map(x=state, z=approx(norm(updir),0) ? FWD : updir)], [yrot(90)],1, 90, 0]
+                  [[frame_map(x=state, z=approx(norm(updir),0) ? FWD : updir)], [yrot(90)],1, 90, 0]
                 : assert(_turtle3d_state_valid(state), "Supplied state is not valid")
                   state,
        finalstate = _turtle3d_repeat(commands, state, repeat)
@@ -479,7 +479,7 @@ function _tupdate(state, tran, pretran) =
     [
      concat(state[0],tran),
      concat(state[1],pretran),
-     each select(state,2,-1)
+     each list_tail(state,2)
     ];
 
 function _turtle3d_command(command, parm, parm2, state, index) =
@@ -504,8 +504,8 @@ function _turtle3d_command(command, parm, parm2, state, index) =
         chnum = (!in_list(command,neednum) || is_num(parm))
                 && (!in_list(command,numornothing) || (is_undef(parm) || is_num(parm))),
         chtran = !in_list(command,needtran) || is_matrix(parm,4,4),
-        lastT = select(state[trlist],-1),
-        lastPre = select(state[prelist],-1),
+        lastT = last(state[trlist]),
+        lastPre = last(state[prelist]),
         lastpt = apply(lastT,[0,0,0])
     )
     assert(chvec,str("\"",command,"\" requires a 3d vector parameter at index ",index))
@@ -540,28 +540,28 @@ function _turtle3d_command(command, parm, parm2, state, index) =
     command=="addlength" ?  list_set(state, movestep, state[movestep]+parm) :
     command=="arcsteps" ?  assert(is_int(parm) && parm>0, str("\"",command,"\" requires a postive integer argument at index ",index))
                            list_set(state, arcsteps, parm) :
-    command=="roll" ? list_set(state, trlist, concat(slice(state[trlist],0,-2), [lastT*xrot(parm)])):
+    command=="roll" ? list_set(state, trlist, concat(list_head(state[trlist]), [lastT*xrot(parm)])):
     in_list(command,["right","left","up","down"]) ? 
-        list_set(state, trlist, concat(slice(state[trlist],0,-2), [lastT*_turtle3d_rotation(command,default(parm,state[angle]))])):
+        list_set(state, trlist, concat(list_head(state[trlist]), [lastT*_turtle3d_rotation(command,default(parm,state[angle]))])):
     in_list(command,["xrot","yrot","zrot"]) ?
         let(
              Trot = _rotpart(lastT),      // Extract rotational part of lastT
              shift = _transpart(lastT)    // Translation part of lastT
         )
-        list_set(state, trlist, concat(slice(state[trlist],0,-2),
+        list_set(state, trlist, concat(list_head(state[trlist]),
                                        [move(shift)*_turtle3d_rotation(command,default(parm,state[angle])) * Trot])):
     command=="rot" ?
         let(
              Trot = _rotpart(lastT),      // Extract rotational part of lastT
              shift = _transpart(lastT)    // Translation part of lastT
         )
-        list_set(state, trlist, concat(slice(state[trlist],0,-2),[move(shift) * parm * Trot])):
+        list_set(state, trlist, concat(list_head(state[trlist]),[move(shift) * parm * Trot])):
     command=="setdir" ?
         let(
              Trot = _rotpart(lastT),
              shift = _transpart(lastT)
         )
-        list_set(state, trlist, concat(slice(state[trlist],0,-2),
+        list_set(state, trlist, concat(list_head(state[trlist]),
                                        [move(shift)*rot(from=apply(Trot,RIGHT),to=parm) * Trot ])):
     in_list(command,["arcleft","arcright","arcup","arcdown"]) ?
         assert(is_num(parm),str("\"",command,"\" command requires a numeric radius value at index ",index))
@@ -693,7 +693,7 @@ function _turtle3d_list_command(command,arcsteps,movescale, lastT,lastPre,index)
    assert(is_vector(grow,2), str("Parameter to \"grow\" must be a scalar or 2d vector at index ",index))
    assert(is_vector(shrink,2), str("Parameter to \"shrink\" must be a scalar or 2d vector at index ",index))
    let(
-       scaling = point3d(vdiv(grow,shrink),1),
+       scaling = point3d(v_div(grow,shrink),1),
        usersteps = struct_val(keys,"steps"),
        roll = struct_val(keys,"roll"),
        ////////////////////////////////////////////////////////////////////////////////////////

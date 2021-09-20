@@ -22,11 +22,13 @@ include <paths.scad>
 include <edges.scad>
 include <arrays.scad>
 include <math.scad>
+include <trigonometry.scad>
 include <vectors.scad>
 include <quaternions.scad>
 include <affine.scad>
 include <coords.scad>
 include <geometry.scad>
+include <hull.scad>
 include <regions.scad>
 include <strings.scad>
 include <skin.scad>

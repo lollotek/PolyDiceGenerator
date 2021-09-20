@@ -36,8 +36,9 @@ test_vnf_faces();
 
 module test_vnf_get_vertex() {
     vnf = [[[-1,-1,-1],[1,-1,-1],[0,1,-1],[0,0,1]],[[0,1,2],[0,3,1],[1,3,2],[2,3,0]]];
-    assert(vnf_get_vertex(vnf,[0,1,-1]) == [[2],vnf]);
-    assert(vnf_get_vertex(vnf,[0,1,2]) == [[4],[concat(vnf[0],[[0,1,2]]),vnf[1]]]);
+    assert(vnf_get_vertex(vnf,[0,1,-1]) == [2,vnf]);
+    assert(vnf_get_vertex(vnf,[0,1,2]) == [4,[concat(vnf[0],[[0,1,2]]),vnf[1]]]);
+    assert(vnf_get_vertex(vnf,[[0,1,-1],[0,1,2]]) == [[2,4],[concat(vnf[0],[[0,1,2]]),vnf[1]]]);
 }
 test_vnf_get_vertex();
 
@@ -73,7 +74,8 @@ module test_vnf_centroid() {
     assert_approx(vnf_centroid(cube(100, anchor=TOP)), [0,0,-50]);
     assert_approx(vnf_centroid(sphere(d=100, anchor=CENTER, $fn=36)), [0,0,0]);
     assert_approx(vnf_centroid(sphere(d=100, anchor=BOT, $fn=36)), [0,0,50]);
-}
+    ellipse = xscale(2, p=circle($fn=24, r=3));
+    assert_approx(vnf_centroid(path_sweep(pentagon(r=1), path3d(ellipse), closed=true)),[0,0,0]);}
 test_vnf_centroid();
 
 

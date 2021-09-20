@@ -11,7 +11,7 @@
 
 // Function: is_vector()
 // Usage:
-//   is_vector(v, [length]);
+//   is_vector(v, [length], ...);
 // Description:
 //   Returns true if v is a list of finite numbers.
 // Arguments:
@@ -36,26 +36,23 @@
 //   is_vector([1,1,1],all_nonzero=false);  // Returns true
 //   is_vector([],zero=false);              // Returns false
 function is_vector(v, length, zero, all_nonzero=false, eps=EPSILON) =
-    is_list(v) && is_num(v[0]) && is_num(0*(v*v))
+    is_list(v) && len(v)>0 && []==[for(vi=v) if(!is_num(vi)) 0] 
     && (is_undef(length) || len(v)==length)
     && (is_undef(zero) || ((norm(v) >= eps) == !zero))
     && (!all_nonzero || all_nonzero(v)) ;
 
 
-// Function: vang()
+// Function: v_theta()
 // Usage:
-//   theta = vang([X,Y]);
-//   theta_phi = vang([X,Y,Z]);
+//   theta = v_theta([X,Y]);
 // Description:
-//   Given a 2D vector, returns the angle in degrees counter-clockwise from X+ on the XY plane.
-//   Given a 3D vector, returns [THETA,PHI] where THETA is the number of degrees counter-clockwise from X+ on the XY plane, and PHI is the number of degrees up from the X+ axis along the XZ plane.
-function vang(v) =
+//   Given a vector, returns the angle in degrees counter-clockwise from X+ on the XY plane.
+function v_theta(v) =
     assert( is_vector(v,2) || is_vector(v,3) , "Invalid vector")
-    len(v)==2? atan2(v.y,v.x) :
-    let(res=xyz_to_spherical(v)) [res[1], 90-res[2]];
+    atan2(v.y,v.x);
 
 
-// Function: vmul()
+// Function: v_mul()
 // Description:
 //   Element-wise multiplication.  Multiplies each element of `v1` by the corresponding element of `v2`.
 //   Both `v1` and `v2` must be the same length.  Returns a vector of the products.
@@ -63,13 +60,13 @@ function vang(v) =
 //   v1 = The first vector.
 //   v2 = The second vector.
 // Example:
-//   vmul([3,4,5], [8,7,6]);  // Returns [24, 28, 30]
-function vmul(v1, v2) = 
+//   v_mul([3,4,5], [8,7,6]);  // Returns [24, 28, 30]
+function v_mul(v1, v2) = 
     assert( is_list(v1) && is_list(v2) && len(v1)==len(v2), "Incompatible input")
     [for (i = [0:1:len(v1)-1]) v1[i]*v2[i]];
     
 
-// Function: vdiv()
+// Function: v_div()
 // Description:
 //   Element-wise vector division.  Divides each element of vector `v1` by
 //   the corresponding element of vector `v2`.  Returns a vector of the quotients.
@@ -77,37 +74,62 @@ function vmul(v1, v2) =
 //   v1 = The first vector.
 //   v2 = The second vector.
 // Example:
-//   vdiv([24,28,30], [8,7,6]);  // Returns [3, 4, 5]
-function vdiv(v1, v2) = 
+//   v_div([24,28,30], [8,7,6]);  // Returns [3, 4, 5]
+function v_div(v1, v2) = 
     assert( is_vector(v1) && is_vector(v2,len(v1)), "Incompatible vectors")
     [for (i = [0:1:len(v1)-1]) v1[i]/v2[i]];
 
 
-// Function: vabs()
+// Function: v_abs()
 // Description: Returns a vector of the absolute value of each element of vector `v`.
 // Arguments:
 //   v = The vector to get the absolute values of.
 // Example:
-//   vabs([-1,3,-9]);  // Returns: [1,3,9]
-function vabs(v) =
+//   v_abs([-1,3,-9]);  // Returns: [1,3,9]
+function v_abs(v) =
     assert( is_vector(v), "Invalid vector" ) 
     [for (x=v) abs(x)];
 
 
-// Function: vfloor()
+// Function: v_floor()
 // Description:
 //   Returns the given vector after performing a `floor()` on all items.
-function vfloor(v) =
+function v_floor(v) =
     assert( is_vector(v), "Invalid vector" ) 
     [for (x=v) floor(x)];
 
 
-// Function: vceil()
+// Function: v_ceil()
 // Description:
 //   Returns the given vector after performing a `ceil()` on all items.
-function vceil(v) =
+function v_ceil(v) =
     assert( is_vector(v), "Invalid vector" ) 
     [for (x=v) ceil(x)];
+
+
+// Function: v_lookup()
+// Description:
+//   Works just like the built-in function [`lookup()`](https://en.wikibooks.org/wiki/OpenSCAD_User_Manual/Mathematical_Functions#lookup), except that it can also interpolate between vector result values of the same length.
+// Arguments:
+//   x = The scalar value to look up.
+//   v = A list of [KEY,VAL] pairs. KEYs are scalars.  VALs should either all be scalar, or all be vectors of the same length.
+// Example:
+//   x = v_lookup(4.5, [[4, [3,4,5]], [5, [5,6,7]]]);  // Returns: [4,5,6]
+function v_lookup(x, v) =
+    is_num(v[0][1])? lookup(x,v) :
+    let(
+        i = lookup(x, [for (i=idx(v)) [v[i].x,i]]),
+        vlo = v[floor(i)],
+        vhi = v[ceil(i)],
+        lo = vlo[1],
+        hi = vhi[1]
+    )
+    assert(is_vector(lo) && is_vector(hi),
+        "Result values must all be numbers, or all be vectors.")
+    assert(len(lo) == len(hi), "Vector result values must be the same length")
+    vlo.x == vhi.x? vlo[1] :
+    let( u = (x - vlo.x) / (vhi.x - vlo.x) )
+    lerp(lo,hi,u);
 
 
 // Function: unit()
@@ -128,7 +150,7 @@ function vceil(v) =
 //   unit([0,0,0]);    // Asserts an error.
 function unit(v, error=[[["ASSERT"]]]) =
     assert(is_vector(v), str("Expected a vector.  Got: ",v))
-    norm(v)<EPSILON? (error==[[["ASSERT"]]]? assert(norm(v)>=EPSILON) : error) :
+    norm(v)<EPSILON? (error==[[["ASSERT"]]]? assert(norm(v)>=EPSILON,"Tried to normalize a zero vector") : error) :
     v/norm(v);
 
 
@@ -213,9 +235,247 @@ function vector_axis(v1,v2=undef,v3=undef) =
               w1 = point3d(v1/norm(v1)),
               w2 = point3d(v2/norm(v2)),
               w3 = (norm(w1-w2) > eps && norm(w1+w2) > eps) ? w2 
-                   : (norm(vabs(w2)-UP) > eps)? UP 
+                   : (norm(v_abs(w2)-UP) > eps)? UP 
                    : RIGHT
             ) unit(cross(w1,w3));
+
+
+
+// Section: Vector Searching
+
+
+// Function: vector_search()
+// Usage:
+//   indices = vector_search(query, r, target);
+// See Also: vector_search_tree(), vector_nearest()
+// Topics: Search, Points, Closest
+// Description:
+//   Given a list of query points `query` and a `target` to search, 
+//   finds the points in `target` that match each query point. A match holds when the 
+//   distance between a point in `target` and a query point is less than or equal to `r`. 
+//   The returned list will have a list for each query point containing, in arbitrary 
+//   order, the indices of all points that match that query point. 
+//   The `target` may be a simple list of points or a search tree.
+//   When `target` is a large list of points, a search tree is constructed to 
+//   speed up the search with an order around O(log n) per query point. 
+//   For small point lists, a direct search is done dispensing a tree construction. 
+//   Alternatively, `target` may be a search tree built with `vector_tree_search()`.
+//   In that case, that tree is parsed looking for matches.
+// Arguments:
+//   query = list of points to find matches for.
+//   r = the search radius.
+//   target = list of the points to search for matches or a search tree.
+// Example: A set of four queries to find points within 1 unit of the query.  The circles show the search region and all have radius 1.  
+//   $fn=32;
+//   k = 2000;
+//   points = array_group(rands(0,10,k*2,seed=13333),2);
+//   queries = [for(i=[3,7],j=[3,7]) [i,j]];
+//   search_ind = vector_search(queries, points, 1);
+//   move_copies(points) circle(r=.08);
+//   for(i=idx(queries)){
+//       color("blue")stroke(move(queries[i],circle(r=1)), closed=true, width=.08);
+//       color("red") move_copies(select(points, search_ind[i])) circle(r=.08);
+//   }
+// Example: when a series of search with different radius are needed, its is faster to pre-compute the tree
+//   $fn=32;
+//   k = 2000;
+//   points = array_group(rands(0,10,k*2),2,seed=13333);
+//   queries1 = [for(i=[3,7]) [i,i]];
+//   queries2 = [for(i=[3,7]) [10-i,i]];
+//   r1 = 1;
+//   r2 = .7;
+//   search_tree = vector_search_tree(points);
+//   search_1 = vector_search(queries1, r1, search_tree);
+//   search_2 = vector_search(queries2, r2, search_tree);
+//   move_copies(points) circle(r=.08);
+//   for(i=idx(queries1)){
+//       color("blue")stroke(move(queries1[i],circle(r=r1)), closed=true, width=.08);
+//       color("red") move_copies(select(points, search_1[i])) circle(r=.08);
+//   }
+//   for(i=idx(queries2)){
+//       color("green")stroke(move(queries2[i],circle(r=r2)), closed=true, width=.08);
+//       color("red") move_copies(select(points, search_2[i])) circle(r=.08);
+//   }
+function vector_search(query, r, target) =
+    assert( is_finite(r) && r>=0, 
+            "The query radius should be a positive number." )
+    let(
+        tgpts  = is_matrix(target),   // target is a point list
+        tgtree = is_list(target)      // target is a tree
+                 && (len(target)==2)
+                 && is_matrix(target[0])
+                 && is_list(target[1])
+                 && (len(target[1])==4 || (len(target[1])==1 && is_list(target[1][0])) )
+    )
+    assert( tgpts || tgtree, 
+            "The target should be a list of points or a search tree compatible with the query." )
+    let( 
+        dim    = tgpts ? len(target[0]) : len(target[0][0]),
+        simple = is_vector(query, dim),
+        mult   = !simple && is_matrix(query,undef,dim)
+    )
+    assert( simple || mult, 
+            "The query points should be a list of points compatible with the target point list.")
+    tgpts 
+    ?   len(target)<200
+        ?   simple ? [for(i=idx(target)) if(norm(target[i]-query)<r) i ] :
+            [for(q=query) [for(i=idx(target)) if(norm(target[i]-q)<r) i ] ]
+        :   let( tree = _bt_tree(target, count(len(target)), leafsize=25) )
+            simple ? _bt_search(query, r, target, tree) :
+            [for(q=query) _bt_search(q, r, target, tree)]
+    :   simple ?  _bt_search(query, r, target[0], target[1]) :
+        [for(q=query) _bt_search(q, r, target[0], target[1])];
+
+
+//Ball tree search
+function _bt_search(query, r, points, tree) = //echo(tree)
+    assert( is_list(tree) 
+            && (   ( len(tree)==1 && is_list(tree[0]) )
+                || ( len(tree)==4 && is_num(tree[0]) && is_num(tree[1]) ) ), 
+            "The tree is invalid.")
+    len(tree)==1 
+    ?   assert( tree[0]==[] || is_vector(tree[0]), "The tree is invalid." )
+        [for(i=tree[0]) if(norm(points[i]-query)<=r) i ]
+    :   norm(query-points[tree[0]]) > r+tree[1] ? [] :
+        concat( 
+            [ if(norm(query-points[tree[0]])<=r) tree[0] ],
+            _bt_search(query, r, points, tree[2]),
+            _bt_search(query, r, points, tree[3]) ) ;
+     
+
+// Function: vector_search_tree()
+// Usage:
+//    tree = vector_search_tree(points,leafsize);
+// See Also: vector_nearest(), vector_search()
+// Topics: Search, Points, Closest
+// Description:
+//    Construct a search tree for the given list of points to be used as input
+//    to the function `vector_search()`. The use of a tree speeds up the
+//    search process. The tree construction stops branching when 
+//    a tree node represents a number of points less or equal to `leafsize`.
+//    Search trees are ball trees. Constructing the
+//    tree should be O(n log n) and searches should be O(log n), though real life
+//    performance depends on how the data is distributed, and it will deteriorate
+//    for high data dimensions.  This data structure is useful when you will be
+//    performing many searches of the same data, so that the cost of constructing 
+//    the tree is justified. (See https://en.wikipedia.org/wiki/Ball_tree)
+// Arguments:
+//    points = list of points to store in the search tree.
+//    leafsize = the size of the tree leaves. Default: 25
+// Example: A set of four queries to find points within 1 unit of the query.  The circles show the search region and all have radius 1.  
+//   $fn=32;
+//   k = 2000;
+//   points = array_group(rands(0,10,k*2,seed=13333),2);
+//   queries = [for(i=[3,7],j=[3,7]) [i,j]];
+//   search_tree = vector_search_tree(points);
+//   search_ind = vector_tree_search(search_tree, queries, 1);
+//   move_copies(points) circle(r=.08);
+//   for(i=idx(queries)){
+//       color("blue") stroke(move(queries[i],circle(r=1)), closed=true, width=.08);
+//       color("red")  move_copies(select(points, search_ind[i])) circle(r=.08); }
+//   }
+function vector_search_tree(points, leafsize=25) =
+    assert( is_matrix(points), "The input list entries should be points." )
+    assert( is_int(leafsize) && leafsize>=1,
+            "The tree leaf size should be an integer greater than zero.")
+    [ points, _bt_tree(points, count(len(points)), leafsize) ];
+
+
+//Ball tree construction
+function _bt_tree(points, ind, leafsize=25) =
+    len(ind)<=leafsize ? [ind] :
+    let( 
+        bounds = pointlist_bounds(select(points,ind)),
+        coord  = max_index(bounds[1]-bounds[0]), 
+        projc  = [for(i=ind) points[i][coord] ],
+        pmc    = mean(projc), 
+        pivot  = min_index([for(p=projc) abs(p-pmc)]),
+        radius = max([for(i=ind) norm(points[ind[pivot]]-points[i]) ]),
+        median = ninther(projc),
+        Lind   = [for(i=idx(ind)) if(projc[i]<=median && i!=pivot) ind[i] ],
+        Rind   = [for(i=idx(ind)) if(projc[i] >median && i!=pivot) ind[i] ]
+      )
+    [ ind[pivot], radius, _bt_tree(points, Lind, leafsize), _bt_tree(points, Rind, leafsize) ];
+
+
+// Function: vector_nearest()
+// Usage:
+//    indices = vector_nearest(query, k, target)
+// See Also: vector_search(), vector_search_tree()
+// Description:
+//    Search `target` for the `k` points closest to point `query`.
+//    The input `target` is either a list of points to search or a search tree
+//    pre-computed by `vector_search_tree(). A list is returned containing the indices
+//    of the points found in sorted order, closest point first.  
+// Arguments:
+//    query = point to search for
+//    k = number of neighbors to return
+//    target = a list of points or a search tree to search in
+// Example:  Four queries to find the 15 nearest points.  The circles show the radius defined by the most distant query result.  Note they are different for each query.  
+//    $fn=32;
+//    k = 1000;
+//    points = array_group(rands(0,10,k*2,seed=13333),2);
+//    tree = vector_search_tree(points);
+//    queries = [for(i=[3,7],j=[3,7]) [i,j]];
+//    search_ind = [for(q=queries) vector_nearest(q, 15, tree)];
+//    move_copies(points) circle(r=.08);
+//    for(i=idx(queries)){
+//        circle = circle(r=norm(points[last(search_ind[i])]-queries[i]));
+//        color("red")  move_copies(select(points, search_ind[i])) circle(r=.08);
+//        color("blue") stroke(move(queries[i], circle), closed=true, width=.08);  
+//    }
+function vector_nearest(query, k, target) =
+    assert(is_int(k) && k>0)
+    assert(is_vector(query), "Query must be a vector.")
+    let(
+        tgpts  = is_matrix(target,undef,len(query)), // target is a point list
+        tgtree = is_list(target)      // target is a tree
+                 && (len(target)==2)
+                 && is_matrix(target[0],undef,len(query))
+                 && (len(target[1])==4 || (len(target[1])==1 && is_list(target[1][0])) )
+    )
+    assert( tgpts || tgtree, 
+            "The target should be a list of points or a search tree compatible with the query." )
+    assert((tgpts && (k<=len(target))) || (tgtree && (k<=len(target[0]))), 
+            "More results are requested than the number of points.")
+    tgpts
+    ?   let( tree = _bt_tree(target, count(len(target))) )
+        subindex(_bt_nearest( query, k, target,  tree),0)
+    :   subindex(_bt_nearest( query, k, target[0], target[1]),0);
+
+
+//Ball tree nearest
+function _bt_nearest(p, k, points, tree, answers=[]) =
+    assert( is_list(tree) 
+            && (   ( len(tree)==1 && is_list(tree[0]) )
+                || ( len(tree)==4 && is_num(tree[0]) && is_num(tree[1]) ) ), 
+            "The tree is invalid.")
+    len(tree)==1
+    ?   _insert_many(answers, k, [for(entry=tree[0]) [entry, norm(points[entry]-p)]])
+    :   let( d = norm(p-points[tree[0]]) )
+        len(answers)==k && ( d > last(answers)[1]+tree[1] ) ? answers :
+        let(
+            answers1 = _insert_sorted(answers, k, [tree[0],d]),
+            answers2 = _bt_nearest(p, k, points, tree[2], answers1),
+            answers3 = _bt_nearest(p, k, points, tree[3], answers2)
+         )
+         answers3;
+
+
+function _insert_sorted(list, k, new) =
+    (len(list)==k && new[1]>= last(list)[1]) ? list
+    : [
+        for(entry=list) if (entry[1]<=new[1]) entry,
+        new,
+        for(i=[0:1:min(k-1,len(list))-1]) if (list[i][1]>new[1]) list[i]
+      ];
+
+
+function _insert_many(list, k, newlist,i=0) =
+  i==len(newlist) 
+  ?   list
+  :   assert(is_vector(newlist[i],2), "The tree is invalid.")
+      _insert_many(_insert_sorted(list,k,newlist[i]),k,newlist,i+1);
 
 
 

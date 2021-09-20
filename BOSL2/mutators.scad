@@ -96,23 +96,23 @@ module bounding_box(excess=0, planar=false) {
 // Function&Module: half_of()
 //
 // Usage: as module
-//   half_of(v, <cp>, <s>) ...
+//   half_of(v, [cp], [s], [planar]) ...
 // Usage: as function
-//   half_of(v, <cp>, p, <s>)...
+//   result = half_of(p,v,[cp]);
 //
 // Description:
-//   Slices an object at a cut plane, and masks away everything that is on one side.
-//   * Called as a function with a path in the `p` argument, returns the
-//       intersection of path `p` and given half-space.
-//   * Called as a function with a 2D path in the `p` argument
-//       and a 2D vector `p`, returns the intersection of path `p` and given
-//       half-plane.
+//   Slices an object at a cut plane, and masks away everything that is on one side.  The v parameter is either a plane specification or
+//   a normal vector.  The s parameter is needed for the module
+//   version to control the size of the masking cube, which affects preview display.
+//   When called as a function, you must supply a vnf, path or region in p.  If planar is set to true for the module version the operation
+//   is performed in  and UP and DOWN are treated as equivalent to BACK and FWD respectively.
 //
 // Arguments:
+//   p = path, region or VNF to slice.  (Function version)
 //   v = Normal of plane to slice at.  Keeps everything on the side the normal points to.  Default: [0,0,1] (UP)
-//   cp = If given as a scalar, moves the cut plane along the normal by the given amount.  If given as a point, specifies a point on the cut plane.  This can be used to shift where it slices the object at.  Default: [0,0,0]
-//   s = Mask size to use.  Use a number larger than twice your object's largest axis.  If you make this too large, it messes with centering your view.  Default: 100
-//   planar = If true, this becomes a 2D operation.  When planar, a `v` of `UP` or `DOWN` becomes equivalent of `BACK` and `FWD` respectively.
+//   cp = If given as a scalar, moves the cut plane along the normal by the given amount.  If given as a point, specifies a point on the cut plane.  Default: [0,0,0]
+//   s = Mask size to use.  Use a number larger than twice your object's largest axis.  If you make this too large, it messes with centering your view.   Ignored for function version.   Default: 1000
+//   planar = If true, perform a 2D operation.  When planar, a `v` of `UP` or `DOWN` becomes equivalent of `BACK` and `FWD` respectively.
 //
 // Examples:
 //   half_of(DOWN+BACK, cp=[0,-10,0]) cylinder(h=40, r1=10, r2=0, center=false);
@@ -147,23 +147,43 @@ module half_of(v=UP, cp, s=1000, planar=false)
     }
 }
 
-function half_of(_arg1=_undef, _arg2=_undef, _arg3=_undef, _arg4=_undef,
-    v=_undef, cp=_undef, p=_undef, s=_undef) =
-    let(args=get_named_args([_arg1, _arg2, _arg3, _arg4],
-        [[v,undef,0], [cp,0,2], [p,undef,1], [s, 1e4]]),
-        v=args[0], cp0=args[1], p=args[2], s=args[3],
-        cp = is_num(cp0) ? cp0*unit(v) : cp0)
-    assert(is_vector(v,2)||is_vector(v,3),
-      "must provide a half-plane or half-space")
-    let(d=len(v))
-    assert(len(cp) == d, str("cp must have dimension ", d))
-    is_vector(p) ?
-        assert(len(p) == d, str("vector must have dimension ", d))
-        let(z=(p-cp)*v) (z >= 0 ? p : p - (z*v)/(v*v))
-        :
-    p == [] ? [] : // special case: empty path remains empty
+function half_of(p, v=UP, cp) =
+    is_vnf(p) ?
+       assert(is_vector(v) && (len(v)==3 || len(v)==4),str("Must give 3-vector or plane specification",v))
+       assert(select(v,0,2)!=[0,0,0], "vector v must be nonzero")
+       let(
+            plane = is_vector(v,4) ? assert(cp==undef, "Don't use cp with plane definition.") v
+                  : is_undef(cp) ? [each v, 0]
+                  : is_num(cp) ? [each v, cp*(v*v)/norm(v)]
+                  : assert(is_vector(cp,3),"Centerpoint must be a 3-vector")
+                    [each v, cp*v]
+       )
+       vnf_halfspace(plane, p)
+   : is_path(p) || is_region(p) ?
+      let(
+          v = (v==UP)? BACK : (v==DOWN)? FWD : v,
+          cp = is_undef(cp) ? [0,0]
+             : is_num(cp) ? v*cp
+             : assert(is_vector(cp,2) || (is_vector(cp,3) && cp.z==0),"Centerpoint must be 2-vector")
+               cp
+      )
+      assert(is_vector(v,2) || (is_vector(v,3) && v.z==0),"Must give 2-vector")
+      assert(!all_zero(v), "Vector v must be nonzero")
+      let(
+          bounds = pointlist_bounds(move(-cp,p)),
+          L = 2*max(flatten(bounds)),
+          n = unit(v),
+          u = [-n.y,n.x],
+          box = [cp+u*L, cp+(v+u)*L, cp+(v-u)*L, cp-u*L]
+      )
+      intersection(box,p)
+   : assert(false, "Input must be a region, path or VNF");
+
+
+
+/*  This code cut 3d paths but leaves behind connecting line segments
     is_path(p) ?
-        assert(len(p[0]) == d, str("path must have dimension ", d))
+        //assert(len(p[0]) == d, str("path must have dimension ", d))
         let(z = [for(x=p) (x-cp)*v])
         [ for(i=[0:len(p)-1]) each concat(z[i] >= 0 ? [p[i]] : [],
             // we assume a closed path here;
@@ -174,35 +194,25 @@ function half_of(_arg1=_undef, _arg2=_undef, _arg3=_undef, _arg4=_undef,
             // create self-intersection or whiskers:
             z[i]*z[j] >= 0 ? [] : [(z[j]*p[i]-z[i]*p[j])/(z[j]-z[i])]) ]
         :
-    is_vnf(p) ?
-    // we must put is_vnf() before is_region(), because most triangulated
-    // VNFs will pass is_region() test
-    vnf_halfspace(halfspace=concat(v,[-v*cp]), vnf=p) :
-    is_region(p) ?
-        assert(len(v) == 2, str("3D vector not compatible with region"))
-        let(u=unit(v), w=[-u[1], u[0]],
-            R=[[cp+s*w, cp+s*(v+v), cp+s*(v-w), cp-s*w]]) // half-plane
-        intersection(R, p)
-        :
-    assert(false, "must pass either a point, a path, a region, or a VNF");
+*/
+
 
 // Function&Module: left_half()
 //
 // Usage: as module
-//   left_half(<s>, <x>) ...
-//   left_half(planar=true, <s>, <x>) ...
+//   left_half([s], [x]) ...
+//   left_half(planar=true, [s], [x]) ...
 // Usage: as function
-//   left_half(<s>, <x>, path)
-//   left_half(<s>, <x>, region)
-//   left_half(<s>, <x>, vnf)
+//   result = left_half(p, [x]);
 //
 // Description:
 //   Slices an object at a vertical Y-Z cut plane, and masks away everything that is right of it.
 //
 // Arguments:
+//   p = VNF, region or path to slice (function version)
 //   s = Mask size to use.  Use a number larger than twice your object's largest axis.  If you make this too large, OpenSCAD's preview rendering may be incorrect.  Default: 10000
 //   x = The X coordinate of the cut-plane.  Default: 0
-//   planar = If true, this becomes a 2D operation.
+//   planar = If true, perform a 2D operation.
 //
 // Examples:
 //   left_half() sphere(r=20);
@@ -223,30 +233,28 @@ module left_half(s=1000, x=0, planar=false)
         }
     }
 }
-function left_half(_arg1=_undef, _arg2=_undef, _arg3=_undef,
-    x=_undef, p=_undef, s=_undef) =
-    let(args=get_named_args([_arg1, _arg2, _arg3],
-    [[x, 0,1], [p,undef,0], [s, 1e4]]),
-        x=args[0], p=args[1], s=args[2])
-    half_of(v=[1,0,0], cp=x, p=p);
+function left_half(p,x=0) = half_of(p, LEFT, [x,0,0]);
 
 
 
 // Function&Module: right_half()
 //
-// Usage:
+// Usage: as module
 //   right_half([s], [x]) ...
 //   right_half(planar=true, [s], [x]) ...
+// Usage: as function
+//   result = right_half(p, [x]);
 //
 // Description:
 //   Slices an object at a vertical Y-Z cut plane, and masks away everything that is left of it.
 //
 // Arguments:
+//   p = VNF, region or path to slice (function version)
 //   s = Mask size to use.  Use a number larger than twice your object's largest axis.  If you make this too large, OpenSCAD's preview rendering may be incorrect.  Default: 10000
 //   x = The X coordinate of the cut-plane.  Default: 0
-//   planar = If true, this becomes a 2D operation.
+//   planar = If true perform a 2D operation.
 //
-// Examples(FlatSpin):
+// Examples(FlatSpin,VPD=175):
 //   right_half() sphere(r=20);
 //   right_half(x=-5) sphere(r=20);
 // Example(2D):
@@ -265,12 +273,7 @@ module right_half(s=1000, x=0, planar=false)
         }
     }
 }
-function right_half(_arg1=_undef, _arg2=_undef, _arg3=_undef,
-    x=_undef, p=_undef, s=_undef) =
-    let(args=get_named_args([_arg1, _arg2, _arg3],
-    [[x, 0,1], [p,undef,0], [s, 1e4]]),
-        x=args[0], p=args[1], s=args[2])
-    half_of(v=[-1,0,0], cp=x, p=p);
+function right_half(p,x=0) = half_of(p, RIGHT, [x,0,0]);
 
 
 
@@ -279,16 +282,19 @@ function right_half(_arg1=_undef, _arg2=_undef, _arg3=_undef,
 // Usage:
 //   front_half([s], [y]) ...
 //   front_half(planar=true, [s], [y]) ...
+// Usage: as function
+//   result = front_half(p, [y]);
 //
 // Description:
 //   Slices an object at a vertical X-Z cut plane, and masks away everything that is behind it.
 //
 // Arguments:
+//   p = VNF, region or path to slice (function version)
 //   s = Mask size to use.  Use a number larger than twice your object's largest axis.  If you make this too large, OpenSCAD's preview rendering may be incorrect.  Default: 10000
 //   y = The Y coordinate of the cut-plane.  Default: 0
-//   planar = If true, this becomes a 2D operation.
+//   planar = If true perform a 2D operation.
 //
-// Examples(FlatSpin):
+// Examples(FlatSpin,VPD=175):
 //   front_half() sphere(r=20);
 //   front_half(y=5) sphere(r=20);
 // Example(2D):
@@ -307,12 +313,7 @@ module front_half(s=1000, y=0, planar=false)
         }
     }
 }
-function front_half(_arg1=_undef, _arg2=_undef, _arg3=_undef,
-    x=_undef, p=_undef, s=_undef) =
-    let(args=get_named_args([_arg1, _arg2, _arg3],
-    [[x, 0,1], [p,undef,0], [s, 1e4]]),
-        x=args[0], p=args[1], s=args[2])
-    half_of(v=[0,1,0], cp=x, p=p);
+function front_half(p,y=0) = half_of(p, FRONT, [0,y,0]);
 
 
 
@@ -321,14 +322,17 @@ function front_half(_arg1=_undef, _arg2=_undef, _arg3=_undef,
 // Usage:
 //   back_half([s], [y]) ...
 //   back_half(planar=true, [s], [y]) ...
+// Usage: as function
+//   result = back_half(p, [y]);
 //
 // Description:
 //   Slices an object at a vertical X-Z cut plane, and masks away everything that is in front of it.
 //
 // Arguments:
+//   p = VNF, region or path to slice (function version)
 //   s = Mask size to use.  Use a number larger than twice your object's largest axis.  If you make this too large, OpenSCAD's preview rendering may be incorrect.  Default: 10000
 //   y = The Y coordinate of the cut-plane.  Default: 0
-//   planar = If true, this becomes a 2D operation.
+//   planar = If true perform a 2D operation.
 //
 // Examples:
 //   back_half() sphere(r=20);
@@ -349,12 +353,7 @@ module back_half(s=1000, y=0, planar=false)
         }
     }
 }
-function back_half(_arg1=_undef, _arg2=_undef, _arg3=_undef,
-    x=_undef, p=_undef, s=_undef) =
-    let(args=get_named_args([_arg1, _arg2, _arg3],
-    [[x, 0,1], [p,undef,0], [s, 1e4]]),
-        x=args[0], p=args[1], s=args[2])
-    half_of(v=[0,-1,0], cp=x, p=p);
+function back_half(p,y=0) = half_of(p, BACK, [0,y,0]);
 
 
 
@@ -362,11 +361,14 @@ function back_half(_arg1=_undef, _arg2=_undef, _arg3=_undef,
 //
 // Usage:
 //   bottom_half([s], [z]) ...
+// Usage: as function
+//   result = bottom_half(p, [z]);
 //
 // Description:
 //   Slices an object at a horizontal X-Y cut plane, and masks away everything that is above it.
 //
 // Arguments:
+//   p = VNF, region or path to slice (function version)
 //   s = Mask size to use.  Use a number larger than twice your object's largest axis.  If you make this too large, OpenSCAD's preview rendering may be incorrect.  Default: 10000
 //   z = The Z coordinate of the cut-plane.  Default: 0
 //
@@ -383,12 +385,7 @@ module bottom_half(s=1000, z=0)
         }
     }
 }
-function right_half(_arg1=_undef, _arg2=_undef, _arg3=_undef,
-    x=_undef, p=_undef, s=_undef) =
-    let(args=get_named_args([_arg1, _arg2, _arg3],
-    [[x, 0,1], [p,undef,0], [s, 1e4]]),
-        x=args[0], p=args[1], s=args[2])
-    half_of(v=[0,0,-1], cp=x, p=p);
+function bottom_half(p,z=0) = half_of(p,BOTTOM,[0,0,z]);
 
 
 
@@ -396,15 +393,17 @@ function right_half(_arg1=_undef, _arg2=_undef, _arg3=_undef,
 //
 // Usage:
 //   top_half([s], [z]) ...
+//   result = top_half(p, [z]);
 //
 // Description:
 //   Slices an object at a horizontal X-Y cut plane, and masks away everything that is below it.
 //
 // Arguments:
+//   p = VNF, region or path to slice (function version)
 //   s = Mask size to use.  Use a number larger than twice your object's largest axis.  If you make this too large, OpenSCAD's preview rendering may be incorrect.  Default: 10000
 //   z = The Z coordinate of the cut-plane.  Default: 0
 //
-// Examples(Spin):
+// Examples(Spin,VPD=175):
 //   top_half() sphere(r=20);
 //   top_half(z=5) sphere(r=20);
 module top_half(s=1000, z=0)
@@ -417,18 +416,14 @@ module top_half(s=1000, z=0)
         }
     }
 }
-function right_half(_arg1=_undef, _arg2=_undef, _arg3=_undef,
-    x=_undef, p=_undef, s=_undef) =
-    let(args=get_named_args([_arg1, _arg2, _arg3],
-    [[x, 0,1], [p,undef,0], [s, 1e4]]),
-        x=args[0], p=args[1], s=args[2])
-    half_of(v=[0,0,1], cp=x, p=p);
+function top_half(p,z=0) = half_of(p,UP,[0,0,z]);
 
 
 
 //////////////////////////////////////////////////////////////////////
-// Section: Chain Mutators
+// Section: Warp Mutators
 //////////////////////////////////////////////////////////////////////
+
 
 // Module: chain_hull()
 //
@@ -478,10 +473,74 @@ module chain_hull()
 }
 
 
+// Module: path_extrude2d()
+// Usage:
+//   path_extrude2d(path, [caps]) {...}
+// Description:
+//   Extrudes 2D children along the given 2D path, with optional rounded endcaps.
+// Arguments:
+//   path = The 2D path to extrude the geometry along.
+//   caps = If true, caps each end of the path with a `rotate_extrude()`d copy of the children.  This may interact oddly when given asymmetric profile children.
+// Example:
+//   path = [
+//       each right(50, p=arc(d=100,angle=[90,180])),
+//       each left(50, p=arc(d=100,angle=[0,-90])),
+//   ];
+//   path_extrude2d(path,caps=false) {
+//       fwd(2.5) square([5,6],center=true);
+//       fwd(6) square([10,5],center=true);
+//   }
+// Example:
+//   path_extrude2d(arc(d=100,angle=[180,270]))
+//       trapezoid(w1=10, w2=5, h=10, anchor=BACK);
+// Example:
+//   include <BOSL2/beziers.scad>
+//   path = bezier_path([
+//       [-50,0], [-25,50], [0,0], [50,0]
+//   ]);
+//   path_extrude2d(path, caps=false)
+//       trapezoid(w1=10, w2=1, h=5, anchor=BACK);
+module path_extrude2d(path, caps=true) {
+    thin = 0.01;
+    path = deduplicate(path);
+    for (p=pair(path)) {
+        delt = p[1]-p[0];
+        translate(p[0]) {
+            rot(from=BACK,to=delt) {
+                minkowski() {
+                    cube([thin,norm(delt),thin], anchor=FRONT);
+                    rotate([90,0,0]) linear_extrude(height=thin,center=true) children();
+                }
+            }
+        }
+    }
+    for (t=triplet(path)) {
+        ang = v_theta(t[2]-t[1]) - v_theta(t[1]-t[0]);
+        delt = t[2] - t[1];
+        translate(t[1]) {
+            minkowski() {
+                cube(thin,center=true);
+                if (ang >= 0) {
+                    rotate(90-ang)
+                        rot(from=LEFT,to=delt)
+                            rotate_extrude(angle=ang+0.01)
+                                right_half(planar=true) children();
+                } else {
+                    rotate(-90)
+                        rot(from=RIGHT,to=delt)
+                            rotate_extrude(angle=-ang+0.01)
+                                left_half(planar=true) children();
+                }
+            }
+        }
+    }
+    if (caps) {
+        move_copies([path[0],last(path)])
+            rotate_extrude()
+                right_half(planar=true) children();
+    }
+}
 
-//////////////////////////////////////////////////////////////////////
-// Section: Warp Mutators
-//////////////////////////////////////////////////////////////////////
 
 // Module: cylindrical_extrude()
 // Usage:
@@ -765,13 +824,23 @@ module HSL(h,s=1,l=0.5,a=1) color(HSL(h,s,l),a) children();
 //   rgb = HSV(h=270,s=0.75,v=0.9);
 //   color(rgb) cube(60, center=true);
 function HSV(h,s=1,v=1) =
+    assert(s>=0 && s<=1)
+    assert(v>=0 && v<=1)
     let(
-        h=posmod(h,360),
-        v2=v*(1-s),
-        r=lookup(h,[[0,v], [60,v], [120,v2], [240,v2], [300,v], [360,v]]),
-        g=lookup(h,[[0,v2], [60,v], [180,v], [240,v2], [360,v2]]),
-        b=lookup(h,[[0,v2], [120,v2], [180,v], [300,v], [360,v2]])
-    ) [r,g,b];
+        h = posmod(h,360),
+        c = v * s,
+        hprime = h/60,
+        x = c * (1- abs(hprime % 2 - 1)),
+        rgbprime = hprime <=1 ? [c,x,0]
+                 : hprime <=2 ? [x,c,0]
+                 : hprime <=3 ? [0,c,x]
+                 : hprime <=4 ? [0,x,c]
+                 : hprime <=5 ? [x,0,c]
+                 : hprime <=6 ? [c,0,x]
+                 : [0,0,0],
+        m=v-c
+    )
+    rgbprime+[m,m,m];
 
 module HSV(h,s=1,v=1,a=1) color(HSV(h,s,v),a) children();
 

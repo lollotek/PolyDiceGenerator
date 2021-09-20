@@ -34,7 +34,7 @@ function _substr(str,pos,len,substr="") =
     _substr(str, pos+1, len-1, str(substr, str[pos]));
 
 
-// Function suffix()
+// Function: suffix()
 // Usage:
 //   suffix(str,len)
 // Description:
@@ -335,7 +335,7 @@ function _str_find_last(str,pattern,sindex) =
         (sindex >=0 ? sindex : undef);
 
 function _str_find_all(str,pattern) =
-    pattern == "" ? list_range(len(str)) :
+    pattern == "" ? count(len(str)) :
     [for(i=[0:1:len(str)-len(pattern)]) if (_str_cmp(str,i,pattern)) i];
 
 
@@ -726,7 +726,7 @@ function str_pad(str,length,char=" ",left=false) =
   left ? str(padding,str) : str(str,padding);
 
 
-// Function str_replace_char()
+// Function: str_replace_char()
 // Usage:
 //   newstr = str_replace_char(str, char, replace)
 // Description:
@@ -734,7 +734,7 @@ function str_pad(str,length,char=" ",left=false) =
 //   can be any string.  
 function str_replace_char(str,char,replace) =
    assert(is_str(str))
-   assert(is_str(char) && len(char)==1, "Search pattern 'char' must be a a single character string")
+   assert(is_str(char) && len(char)==1, "Search pattern 'char' must be a single character string")
    assert(is_str(replace))
    str_join([for(c=str) c==char ? replace : c]);
 

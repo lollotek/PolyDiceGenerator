@@ -74,77 +74,76 @@ module hull_points(points, fast=false) {
 }
 
 
+
+function _backtracking(i,points,h,t,m,all) =
+    m<t || _is_cw(points[i], points[h[m-1]], points[h[m-2]],all) ? m :
+    _backtracking(i,points,h,t,m-1,all) ;
+
+// clockwise check (2d)
+function _is_cw(a,b,c,all) = 
+    all ? cross(a-c,b-c)<=EPSILON*norm(a-c)*norm(b-c) :
+    cross(a-c,b-c)<-EPSILON*norm(a-c)*norm(b-c);
+
+
 // Function: hull2d_path()
 // Usage:
-//   hull2d_path(points)
+//   hull2d_path(points,all)
 // Description:
 //   Takes a list of arbitrary 2D points, and finds the convex hull polygon to enclose them.
-//   Returns a path as a list of indices into `points`.  May return extra points, that are on edges of the hull.
+//   Returns a path as a list of indices into `points`. 
+//   When all==true, returns extra points that are on edges of the hull.
+// Arguments:
+//   points - list of 2d points to get the hull of.
+//   all - when true, includes all points on the edges of the convex hull. Default: false.
 // Example(2D):
 //   pts = [[-10,-10], [0,10], [10,10], [12,-10]];
 //   path = hull2d_path(pts);
 //   move_copies(pts) color("red") sphere(1);
 //   polygon(points=pts, paths=[path]);
-function hull2d_path(points) =
+//
+// Code based on this method:
+// https://www.hackerearth.com/practice/math/geometry/line-sweep-technique/tutorial/
+//
+function hull2d_path(points, all=false) =
     assert(is_path(points,2),"Invalid input to hull2d_path")
-    len(points) < 2 ? []
-  : len(points) == 2 ? [0,1]
-  : let(tri=noncollinear_triple(points, error=false))
-    tri == [] ? _hull_collinear(points)
-  : let(
-        remaining = [ for (i = [0:1:len(points)-1]) if (i != tri[0] && i!=tri[1] && i!=tri[2]) i ],
-        ccw = triangle_area(points[tri[0]], points[tri[1]], points[tri[2]]) > 0,
-        polygon = ccw ? [tri[0],tri[1],tri[2]] : [tri[0],tri[2],tri[1]]
-    ) _hull2d_iterative(points, polygon, remaining);
-
-
-
-// Adds the remaining points one by one to the convex hull
-function _hull2d_iterative(points, polygon, remaining, _i=0) =
-    (_i >= len(remaining))? polygon : let (
-        // pick a point
-        i = remaining[_i],
-        // find the segments that are in conflict with the point (point not inside)
-        conflicts = _find_conflicting_segments(points, polygon, points[i])
-        // no conflicts, skip point and move on
-    ) (len(conflicts) == 0)? _hull2d_iterative(points, polygon, remaining, _i+1) : let(
-        // find the first conflicting segment and the first not conflicting
-        // conflict will be sorted, if not wrapping around, do it the easy way
-        polygon = _remove_conflicts_and_insert_point(polygon, conflicts, i)
-    ) _hull2d_iterative(points, polygon, remaining, _i+1);
-
+    len(points) < 2 ? [] :
+    let( n  = len(points), 
+         ip = sortidx(points) )
+    // lower hull points
+    let( lh = 
+            [ for(   i = 2,
+                    k = 2, 
+                    h = [ip[0],ip[1]]; // current list of hull point indices 
+                  i <= n;
+                    k = i<n ? _backtracking(ip[i],points,h,2,k,all)+1 : k,
+                    h = i<n ? [for(j=[0:1:k-2]) h[j], ip[i]] : [], 
+                    i = i+1
+                 ) if( i==n ) h ][0] )
+    // concat lower hull points with upper hull ones
+    [ for(   i = n-2,
+            k = len(lh), 
+            t = k+1,
+            h = lh; // current list of hull point indices 
+          i >= -1;
+            k = i>=0 ? _backtracking(ip[i],points,h,t,k,all)+1 : k,
+            h = [for(j=[0:1:k-2]) h[j], if(i>0) ip[i]],
+            i = i-1
+         ) if( i==-1 ) h ][0] ;
+       
 
 function _hull_collinear(points) =
     let(
         a = points[0],
-        n = points[1] - a,
+        i = max_index([for(pt=points) norm(pt-a)]),
+        n = points[i] - a
+    )
+    norm(n)==0 ? [0]
+    :
+    let(
         points1d = [ for(p = points) (p-a)*n ],
         min_i = min_index(points1d),
         max_i = max_index(points1d)
     ) [min_i, max_i];
-
-
-function _find_conflicting_segments(points, polygon, point) = [
-    for (i = [0:1:len(polygon)-1]) let(
-        j = (i+1) % len(polygon),
-        p1 = points[polygon[i]],
-        p2 = points[polygon[j]],
-        area = triangle_area(p1, p2, point)
-    ) if (area < 0) i
-];
-
-
-// remove the conflicting segments from the polygon
-function _remove_conflicts_and_insert_point(polygon, conflicts, point) = 
-    (conflicts[0] == 0)? let(
-        nonconflicting = [ for(i = [0:1:len(polygon)-1]) if (!in_list(i, conflicts)) i ],
-        new_indices = concat(nonconflicting, (nonconflicting[len(nonconflicting)-1]+1) % len(polygon)),
-        polygon = concat([ for (i = new_indices) polygon[i] ], point)
-    ) polygon : let(
-        before_conflicts = [ for(i = [0:1:min(conflicts)]) polygon[i] ],
-        after_conflicts  = (max(conflicts) >= (len(polygon)-1))? [] : [ for(i = [max(conflicts)+1:1:len(polygon)-1]) polygon[i] ],
-        polygon = concat(before_conflicts, point, after_conflicts)
-    ) polygon;
 
 
 
@@ -165,7 +164,7 @@ function _remove_conflicts_and_insert_point(polygon, conflicts, point) =
 //   %polyhedron(points=pts, faces=faces);
 function hull3d_faces(points) =
     assert(is_path(points,3),"Invalid input to hull3d_faces")
-    len(points) < 3 ? list_range(len(points))
+    len(points) < 3 ? count(len(points))
   : let ( // start with a single non-collinear triangle
           tri = noncollinear_triple(points, error=false)
         )
@@ -175,19 +174,19 @@ function hull3d_faces(points) =
         b = tri[1],
         c = tri[2],
         plane = plane3pt_indexed(points, a, b, c),
-        d = _find_first_noncoplanar(plane, points, 3)
+        d = _find_first_noncoplanar(plane, points)
     )
     d == len(points)
   ? /* all coplanar*/
     let (
-        pts2d = [ for (p = points) project_plane(p, points[a], points[b], points[c]) ],
+        pts2d =  project_plane([points[a], points[b], points[c]],points),
         hull2d = hull2d_path(pts2d)
     ) hull2d
   : let(
         remaining = [for (i = [0:1:len(points)-1]) if (i!=a && i!=b && i!=c && i!=d) i],
         // Build an initial tetrahedron.
         // Swap b, c if d is in front of triangle t.
-        ifop = in_front_of_plane(plane, points[d]),
+        ifop = above_plane(plane, points[d]),
         bc = ifop? [c,b] : [b,c],
         b = bc[0],
         c = bc[1],
@@ -203,30 +202,37 @@ function hull3d_faces(points) =
 
 
 // Adds the remaining points one by one to the convex hull
-function _hull3d_iterative(points, triangles, planes, remaining, _i=0) =
+function _hull3d_iterative(points, triangles, planes, remaining, _i=0) = //let( EPSILON=1e-12 )
     _i >= len(remaining) ? triangles : 
     let (
         // pick a point
         i = remaining[_i],
+        // evaluate the triangle plane equations at point i
+        planeq_val = planes*[each points[i], -1],
         // find the triangles that are in conflict with the point (point not inside)
-        conflicts = _find_conflicts(points[i], planes),
-        // for all triangles that are in conflict, collect their halfedges
+        conflicts = [for (i = [0:1:len(planeq_val)-1]) if (planeq_val[i]>EPSILON) i ],
+        // collect the halfedges of all triangles that are in conflict 
         halfedges = [ 
-            for(c = conflicts, i = [0:2]) let(
-                j = (i+1)%3
-            ) [triangles[c][i], triangles[c][j]]
+            for(c = conflicts, i = [0:2])
+                [triangles[c][i], triangles[c][(i+1)%3]]
         ],
         // find the outer perimeter of the set of conflicting triangles
         horizon = _remove_internal_edges(halfedges),
-        // generate a new triangle for each horizon halfedge together with the picked point i
-        new_triangles = [ for (h = horizon) concat(h,i) ],
-        // calculate the corresponding plane equations
-        new_planes = [ for (t = new_triangles) plane3pt_indexed(points, t[0], t[1], t[2]) ]
+        // generate new triangles connecting point i to each horizon halfedge vertices
+        tri2add = [ for (h = horizon) concat(h,i) ],
+        // add tria2add and remove conflict triangles
+        new_triangles = 
+            concat( tri2add,
+                    [ for (i = [0:1:len(planes)-1]) if (planeq_val[i]<=EPSILON) triangles[i] ] 
+                  ),
+        // add the plane equations of new added triangles and remove the plane equations of the conflict ones
+        new_planes = 
+            [ for (t = tri2add) plane3pt_indexed(points, t[0], t[1], t[2]) ,
+              for (i = [0:1:len(planes)-1]) if (planeq_val[i]<=EPSILON) planes[i] ] 
     ) _hull3d_iterative(
         points,
-        //  remove the conflicting triangles and add the new ones
-        concat(list_remove(triangles, conflicts), new_triangles),
-        concat(list_remove(planes, conflicts), new_planes),
+        new_triangles,
+        new_planes,
         remaining,
         _i+1
     );
@@ -238,15 +244,7 @@ function _remove_internal_edges(halfedges) = [
             h
 ];
 
-
-function _find_conflicts(point, planes) = [
-    for (i = [0:1:len(planes)-1])
-        if (in_front_of_plane(planes[i], point))
-            i
-];
-
-
-function _find_first_noncoplanar(plane, points, i) = 
+function _find_first_noncoplanar(plane, points, i=0) = 
     (i >= len(points) || !points_on_plane([points[i]],plane))? i :
     _find_first_noncoplanar(plane, points, i+1);
 
